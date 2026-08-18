@@ -1,0 +1,82 @@
+services:
+  new-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: --log-dir /app/logs
+    expose:
+      - "3000"
+    environment:
+      PORT: "3000"
+      SQL_DSN: postgresql://newapi:${SERVICE_PASSWORD_64_POSTGRES}@postgres:5432/newapi?sslmode=disable
+      REDIS_CONN_STRING: redis://:${SERVICE_PASSWORD_64_REDIS}@redis:6379/0
+      SESSION_SECRET: ${SERVICE_BASE64_64_SESSION}
+      CRYPTO_SECRET: ${SERVICE_BASE64_64_SESSION}
+      SESSION_COOKIE_SECURE: "true"
+      SESSION_COOKIE_TRUSTED_URL: ${APP_URL:?Set APP_URL to the exact public HTTPS URL}
+      TRUSTED_PROXIES: 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      TZ: Asia/Shanghai
+      ERROR_LOG_ENABLED: "true"
+      BATCH_UPDATE_ENABLED: "true"
+      NODE_NAME: new-api-coolify-1
+      STREAMING_TIMEOUT: "300"
+    volumes:
+      - new_api_data:/data
+      - new_api_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--output-document=/dev/null", "http://127.0.0.1:3000/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    stop_grace_period: 30s
+
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: newapi
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_64_POSTGRES}
+      POSTGRES_DB: newapi
+      TZ: Asia/Shanghai
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U newapi -d newapi"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${SERVICE_PASSWORD_64_REDIS}
+    environment:
+      REDISCLI_AUTH: ${SERVICE_PASSWORD_64_REDIS}
+      TZ: Asia/Shanghai
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  new_api_data:
+  new_api_logs:
+  postgres_data:
+  redis_data:
