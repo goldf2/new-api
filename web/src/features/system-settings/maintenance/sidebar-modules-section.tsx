@@ -106,6 +106,10 @@ export function SidebarModulesSection({
         title: t('Token management'),
         description: t('Create, revoke, and audit API tokens.'),
       },
+      tutorial: {
+        title: t('Tutorials'),
+        description: t('User guides for API keys, clients, and Codex setup.'),
+      },
       log: {
         title: t('Usage logs'),
         description: t('Detailed request logs for investigations.'),
