@@ -4,7 +4,7 @@ param(
     [ValidateSet('Menu', 'InstallCli', 'InstallGlobal', 'RotateKey', 'Status', 'Restore')]
     [string]$Action = 'Menu',
 
-    [string]$BaseUrl = 'https://kmepu6yo89vk6b28cnoajopf.13.140.158.124.sslip.io/v1',
+    [string]$BaseUrl = 'https://ai.ebm001.com/v1',
 
     [string]$Model = 'gpt-5.6-sol',
 

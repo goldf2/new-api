@@ -24,9 +24,15 @@ import {
   buildUnixInstallerCommand,
   buildWindowsInstallerCommand,
   getApiBaseUrl,
+  PUBLIC_SITE_ORIGIN,
 } from '../lib'
 
 describe('tutorial configuration examples', () => {
+  test('uses the public New API domain', () => {
+    expect(PUBLIC_SITE_ORIGIN).toBe('https://ai.ebm001.com')
+    expect(getApiBaseUrl(PUBLIC_SITE_ORIGIN)).toBe('https://ai.ebm001.com/v1')
+  })
+
   test('normalizes the current origin into an API base URL', () => {
     expect(getApiBaseUrl('https://gateway.example/')).toBe(
       'https://gateway.example/v1'

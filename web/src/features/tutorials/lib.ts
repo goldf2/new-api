@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+export const PUBLIC_SITE_ORIGIN = 'https://ai.ebm001.com'
+
 export function getApiBaseUrl(origin: string): string {
   return `${origin.replace(/\/+$/, '')}/v1`
 }

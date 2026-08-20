@@ -51,6 +51,7 @@ import {
   buildWindowsInstallerCommand,
   getApiBaseUrl,
   getSiteOrigin,
+  PUBLIC_SITE_ORIGIN,
 } from './lib'
 
 type GuideStepProps = {
@@ -132,15 +133,7 @@ function Notice({
 export function Tutorials() {
   const { t } = useTranslation()
   const isAdmin = useIsAdmin()
-  const origin = useMemo(
-    () =>
-      getSiteOrigin(
-        typeof window === 'undefined'
-          ? 'https://your-domain.example'
-          : window.location.origin
-      ),
-    []
-  )
+  const origin = useMemo(() => getSiteOrigin(PUBLIC_SITE_ORIGIN), [])
   const baseUrl = useMemo(() => getApiBaseUrl(origin), [origin])
   const curlExample = useMemo(() => buildResponsesCurl(baseUrl), [baseUrl])
   const codexConfig = useMemo(() => buildCodexConfig(baseUrl), [baseUrl])

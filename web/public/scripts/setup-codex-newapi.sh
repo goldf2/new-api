@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_NAME="$(basename "$0")"
-DEFAULT_BASE_URL="https://kmepu6yo89vk6b28cnoajopf.13.140.158.124.sslip.io/v1"
+DEFAULT_BASE_URL="https://ai.ebm001.com/v1"
 DEFAULT_MODEL="gpt-5.6-sol"
 DEFAULT_REASONING="high"
 KEY_SERVICE="codex-newapi-key"
