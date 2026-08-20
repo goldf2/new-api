@@ -17,10 +17,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { useTranslation } from 'react-i18next'
 
-import { Sidebar, SidebarContent, SidebarRail } from '@/components/ui/sidebar'
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarRail,
+} from '@/components/ui/sidebar'
 import { useLayout } from '@/context/layout-provider'
 import { useSidebarView } from '@/hooks/use-sidebar-view'
+import { useStatus } from '@/hooks/use-status'
 import { MOTION_TRANSITION, MOTION_VARIANTS } from '@/lib/motion'
 
 import { NavGroup } from './nav-group'
@@ -44,8 +51,10 @@ import { SidebarViewHeader } from './sidebar-view-header'
  * in the registry; this component requires no changes.
  */
 export function AppSidebar() {
+  const { t } = useTranslation()
   const { collapsible, variant } = useLayout()
   const { key, view, navGroups } = useSidebarView()
+  const { status } = useStatus()
   const shouldReduce = useReducedMotion()
 
   return (
@@ -70,6 +79,17 @@ export function AppSidebar() {
           </motion.div>
         </AnimatePresence>
       </SidebarContent>
+
+      {status?.version && (
+        <SidebarFooter className='border-sidebar-border border-t px-3 py-2 group-data-[collapsible=icon]:hidden'>
+          <p
+            className='text-sidebar-foreground/60 truncate text-xs tabular-nums'
+            title={`${t('Version')}: ${status.version}`}
+          >
+            {t('Version')}: {status.version}
+          </p>
+        </SidebarFooter>
+      )}
 
       <SidebarRail />
     </Sidebar>
