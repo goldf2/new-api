@@ -20,6 +20,26 @@ export function getApiBaseUrl(origin: string): string {
   return `${origin.replace(/\/+$/, '')}/v1`
 }
 
+export function getSiteOrigin(origin: string): string {
+  return origin.replace(/\/+$/, '')
+}
+
+export function buildUnixInstallerCommand(
+  origin: string,
+  baseUrl: string
+): string {
+  const siteOrigin = getSiteOrigin(origin)
+  return `curl -fsSL "${siteOrigin}/scripts/setup-codex-newapi.sh" | bash -s -- --base-url "${baseUrl}"`
+}
+
+export function buildWindowsInstallerCommand(
+  origin: string,
+  baseUrl: string
+): string {
+  const siteOrigin = getSiteOrigin(origin)
+  return `$script = Invoke-RestMethod "${siteOrigin}/scripts/setup-codex-newapi.ps1"; & ([ScriptBlock]::Create($script)) -BaseUrl "${baseUrl}"`
+}
+
 export function buildResponsesCurl(baseUrl: string): string {
   return `curl "${baseUrl}/responses" \\
   -H "Authorization: Bearer sk-YOUR_NEW_API_KEY" \\

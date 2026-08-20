@@ -1,0 +1,769 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_NAME="$(basename "$0")"
+DEFAULT_BASE_URL="https://kmepu6yo89vk6b28cnoajopf.13.140.158.124.sslip.io/v1"
+DEFAULT_MODEL="gpt-5.6-sol"
+DEFAULT_REASONING="high"
+KEY_SERVICE="codex-newapi-key"
+MANAGED_BEGIN="# >>> codex-newapi managed >>>"
+MANAGED_END="# <<< codex-newapi managed <<<"
+
+ACTION="menu"
+BASE_URL="$DEFAULT_BASE_URL"
+MODEL="$DEFAULT_MODEL"
+REASONING="$DEFAULT_REASONING"
+TARGET_HOME="${CODEX_NEWAPI_HOME:-$HOME/.codex-na}"
+MANAGER_HOME="${CODEX_NEWAPI_MANAGER_HOME:-$HOME/.codex-newapi-manager}"
+GLOBAL_HOME="$HOME/.codex"
+GLOBAL_CONFIG="$GLOBAL_HOME/config.toml"
+GLOBAL_BACKUP="$MANAGER_HOME/config.toml.before-newapi"
+GLOBAL_ORIGINAL_STATE="$MANAGER_HOME/global-original-state"
+MODE_FILE="$MANAGER_HOME/mode"
+SHELL_RC=""
+DRY_RUN=0
+
+# Keep interactive prompts attached to the user's terminal when the script is
+# launched through `curl ... | bash`.
+if [ -t 0 ]; then
+  exec 3<&0
+elif { exec 3</dev/tty; } 2>/dev/null; then
+  :
+else
+  exec 3<&0
+fi
+
+log() {
+  printf '[codex-newapi] %s\n' "$*"
+}
+
+warn() {
+  printf '[codex-newapi] WARNING: %s\n' "$*" >&2
+}
+
+die() {
+  printf '[codex-newapi] ERROR: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<EOF
+Usage:
+  $SCRIPT_NAME
+  $SCRIPT_NAME install [options]
+  $SCRIPT_NAME global [options]
+  $SCRIPT_NAME rotate-key
+  $SCRIPT_NAME status [options]
+  $SCRIPT_NAME restore [options]
+
+Options:
+  --base-url URL       New API base URL (default: $DEFAULT_BASE_URL)
+  --model MODEL        Default model (default: $DEFAULT_MODEL)
+  --reasoning LEVEL    minimal|low|medium|high|xhigh (default: $DEFAULT_REASONING)
+  --codex-home PATH    Isolated Codex home (default: ~/.codex-na)
+  --shell-rc PATH      Shell startup file to update
+  --dry-run            Show detected settings without changing files or credentials
+  -h, --help           Show this help
+
+Run without arguments to open the interactive menu.
+
+"install" only redirects the terminal Codex CLI. "global" changes the default
+~/.codex configuration used by Codex clients, but it does not replace a
+ChatGPT account or ChatGPT login.
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    menu|install|global|rotate-key|status|restore|uninstall)
+      ACTION="$1"
+      shift
+      ;;
+    --base-url)
+      [ "$#" -ge 2 ] || die "--base-url requires a value"
+      BASE_URL="$2"
+      shift 2
+      ;;
+    --model)
+      [ "$#" -ge 2 ] || die "--model requires a value"
+      MODEL="$2"
+      shift 2
+      ;;
+    --reasoning)
+      [ "$#" -ge 2 ] || die "--reasoning requires a value"
+      REASONING="$2"
+      shift 2
+      ;;
+    --codex-home)
+      [ "$#" -ge 2 ] || die "--codex-home requires a value"
+      TARGET_HOME="$2"
+      shift 2
+      ;;
+    --shell-rc)
+      [ "$#" -ge 2 ] || die "--shell-rc requires a value"
+      SHELL_RC="$2"
+      shift 2
+      ;;
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      die "Unknown argument: $1"
+      ;;
+  esac
+done
+
+case "$REASONING" in
+  minimal|low|medium|high|xhigh) ;;
+  *) die "Unsupported reasoning level: $REASONING" ;;
+esac
+
+case "$MODEL" in
+  *[!A-Za-z0-9._:-]*|'') die "model contains unsupported characters: $MODEL" ;;
+esac
+
+case "$BASE_URL" in
+  *\"*|*\\*|*' '*) die "base URL contains unsupported whitespace or quoting characters" ;;
+esac
+
+case "$TARGET_HOME" in
+  *\'*) die "--codex-home cannot contain a single quote" ;;
+esac
+
+detect_platform() {
+  local kernel
+  kernel="${CODEX_NEWAPI_PLATFORM_OVERRIDE:-$(uname -s)}"
+  case "$kernel" in
+    Darwin|macos)
+      PLATFORM="macos"
+      ;;
+    Linux|linux)
+      PLATFORM="linux"
+      if [ -r /etc/os-release ]; then
+        # shellcheck disable=SC1091
+        . /etc/os-release
+        LINUX_ID="${ID:-unknown}"
+      else
+        LINUX_ID="unknown"
+      fi
+      if [ "$LINUX_ID" != "ubuntu" ] && [ "$LINUX_ID" != "debian" ]; then
+        warn "Linux distribution '$LINUX_ID' is not Ubuntu/Debian; continuing with the portable fallback"
+      fi
+      ;;
+    *)
+      die "Unsupported operating system: $kernel (supported: macOS and Ubuntu/Debian)"
+      ;;
+  esac
+}
+
+select_shell_rc() {
+  if [ -n "$SHELL_RC" ]; then
+    return
+  fi
+
+  case "${SHELL:-}" in
+    */zsh) SHELL_RC="$HOME/.zshrc" ;;
+    */bash) SHELL_RC="$HOME/.bashrc" ;;
+    *)
+      if [ "$PLATFORM" = "macos" ]; then
+        SHELL_RC="$HOME/.zshrc"
+      else
+        SHELL_RC="$HOME/.bashrc"
+      fi
+      ;;
+  esac
+}
+
+normalize_base_url() {
+  BASE_URL="${BASE_URL%/}"
+  case "$BASE_URL" in
+    http://*|https://*) ;;
+    *) die "base URL must begin with http:// or https://" ;;
+  esac
+
+  case "$BASE_URL" in
+    */responses|*/chat/completions)
+      die "base URL must stop at /v1; do not include an endpoint path"
+      ;;
+    */v1) ;;
+    *) BASE_URL="$BASE_URL/v1" ;;
+  esac
+}
+
+find_codex_binary() {
+  if [ -n "${CODEX_NEWAPI_CODEX_BIN:-}" ]; then
+    CODEX_BIN="$CODEX_NEWAPI_CODEX_BIN"
+  else
+    CODEX_BIN="$(command -v codex 2>/dev/null || true)"
+  fi
+
+  [ -n "$CODEX_BIN" ] || die "codex was not found in PATH; install Codex CLI first"
+  case "$CODEX_BIN" in
+    /*) ;;
+    *) die "codex did not resolve to an absolute executable path: $CODEX_BIN" ;;
+  esac
+  [ -x "$CODEX_BIN" ] || die "codex is not executable: $CODEX_BIN"
+}
+
+timestamp() {
+  date '+%Y%m%d-%H%M%S'
+}
+
+backup_file() {
+  local path="$1"
+  if [ -f "$path" ]; then
+    local backup="${path}.backup.$(timestamp)"
+    cp -p "$path" "$backup"
+  fi
+}
+
+remove_managed_block() {
+  local path="$1"
+  [ -f "$path" ] || return 0
+
+  local tmp="${path}.codex-newapi.tmp.$$"
+  awk -v begin="$MANAGED_BEGIN" -v end="$MANAGED_END" '
+    $0 == begin { skipping = 1; next }
+    $0 == end { skipping = 0; next }
+    !skipping { print }
+  ' "$path" > "$tmp"
+  local mode
+  mode="$(stat -c '%a' "$path" 2>/dev/null || stat -f '%Lp' "$path")"
+  chmod "$mode" "$tmp"
+  mv "$tmp" "$path"
+}
+
+configure_macos_credential() {
+  local force="${1:-0}"
+  command -v security >/dev/null 2>&1 || die "macOS security command was not found"
+
+  if [ "$force" -eq 0 ] && \
+     security find-generic-password -a "$USER" -s "$KEY_SERVICE" >/dev/null 2>&1; then
+    log "已找到保存的 New API 密钥"
+  else
+    [ -t 3 ] || die "interactive terminal required to store the New API key in Keychain"
+    cat <<'EOF'
+
+请粘贴 New API 密钥，然后按回车。
+输入时屏幕上不会显示任何内容，这是正常的。
+EOF
+    security add-generic-password -U -a "$USER" -s "$KEY_SERVICE" -w <&3
+    log "New API 密钥已保存"
+  fi
+
+  AUTH_KIND="macos-keychain"
+  AUTH_COMMAND="/usr/bin/security"
+  AUTH_ARGS="[\"find-generic-password\", \"-a\", \"$USER\", \"-s\", \"$KEY_SERVICE\", \"-w\"]"
+}
+
+configure_linux_credential() {
+  local force="${1:-0}"
+  local api_key=""
+  local secret_tool=""
+
+  : "$force"
+
+  [ -t 3 ] || die "interactive terminal required to read the New API key"
+  cat <<'EOF'
+
+请粘贴 New API 密钥，然后按回车。
+输入时屏幕上不会显示任何内容，这是正常的。
+EOF
+  printf 'New API key: '
+  IFS= read -r -s api_key <&3
+  printf '\n'
+  [ -n "$api_key" ] || die "empty API key"
+
+  secret_tool="$(command -v secret-tool 2>/dev/null || true)"
+  if [ -n "$secret_tool" ] && [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+    if printf '%s' "$api_key" | "$secret_tool" store \
+      --label="Codex New API key" service "$KEY_SERVICE" account "$USER"; then
+      unset api_key
+      AUTH_KIND="linux-secret-service"
+      AUTH_COMMAND="$secret_tool"
+      AUTH_ARGS="[\"lookup\", \"service\", \"$KEY_SERVICE\", \"account\", \"$USER\"]"
+      return
+    fi
+    warn "Secret Service storage failed; using a mode-600 credential file"
+  fi
+
+  local credential_dir="$TARGET_HOME/credentials"
+  local credential_file="$credential_dir/newapi.key"
+  mkdir -p "$credential_dir"
+  chmod 700 "$credential_dir"
+  umask 077
+  printf '%s' "$api_key" > "$credential_file"
+  unset api_key
+  chmod 600 "$credential_file"
+
+  local helper_dir="$TARGET_HOME/bin"
+  local helper_file="$helper_dir/get-newapi-key"
+  mkdir -p "$helper_dir"
+  chmod 700 "$helper_dir"
+  cat > "$helper_file" <<EOF
+#!/usr/bin/env sh
+set -eu
+cat '$credential_file'
+EOF
+  chmod 700 "$helper_file"
+
+  AUTH_KIND="mode-600-file"
+  AUTH_COMMAND="$helper_file"
+  AUTH_ARGS="[]"
+}
+
+print_install_expectations() {
+  cat <<EOF
+
+正在配置 Codex 使用 New API。
+如果接下来提示输入密钥，请粘贴 New API 密钥并按回车。
+配置完成后脚本会自动退出。
+
+EOF
+}
+
+configure_credential() {
+  local force="${1:-0}"
+  if [ "$PLATFORM" = "macos" ]; then
+    configure_macos_credential "$force"
+  else
+    configure_linux_credential "$force"
+  fi
+}
+
+write_config() {
+  mkdir -p "$TARGET_HOME"
+  chmod 700 "$TARGET_HOME"
+
+  local config="$TARGET_HOME/config.toml"
+  backup_file "$config"
+  umask 077
+  cat > "$config" <<EOF
+model = "$MODEL"
+model_provider = "newapi"
+model_reasoning_effort = "$REASONING"
+
+[model_providers.newapi]
+name = "New API"
+base_url = "$BASE_URL"
+wire_api = "responses"
+request_max_retries = 4
+stream_max_retries = 10
+stream_idle_timeout_ms = 300000
+
+[model_providers.newapi.auth]
+command = "$AUTH_COMMAND"
+args = $AUTH_ARGS
+timeout_ms = 5000
+refresh_interval_ms = 0
+EOF
+  chmod 600 "$config"
+  log "Codex 配置已保存"
+}
+
+ensure_manager_home() {
+  mkdir -p "$MANAGER_HOME"
+  chmod 700 "$MANAGER_HOME"
+}
+
+set_mode() {
+  ensure_manager_home
+  printf '%s\n' "$1" > "$MODE_FILE"
+  chmod 600 "$MODE_FILE"
+}
+
+get_mode() {
+  if [ -f "$MODE_FILE" ]; then
+    sed -n '1p' "$MODE_FILE"
+  elif [ -f "$SHELL_RC" ] && grep -qF "$MANAGED_BEGIN" "$SHELL_RC"; then
+    printf 'cli\n'
+  elif [ -f "$GLOBAL_ORIGINAL_STATE" ]; then
+    printf 'global\n'
+  else
+    printf 'official\n'
+  fi
+}
+
+remove_shell_wrapper() {
+  if [ -f "$SHELL_RC" ] && grep -qF "$MANAGED_BEGIN" "$SHELL_RC"; then
+    backup_file "$SHELL_RC"
+    remove_managed_block "$SHELL_RC"
+  fi
+}
+
+prepare_global_backup() {
+  ensure_manager_home
+  if [ -f "$GLOBAL_ORIGINAL_STATE" ]; then
+    return
+  fi
+
+  if [ -f "$GLOBAL_CONFIG" ]; then
+    cp -p "$GLOBAL_CONFIG" "$GLOBAL_BACKUP"
+    chmod 600 "$GLOBAL_BACKUP"
+    printf 'present\n' > "$GLOBAL_ORIGINAL_STATE"
+  else
+    printf 'missing\n' > "$GLOBAL_ORIGINAL_STATE"
+  fi
+  chmod 600 "$GLOBAL_ORIGINAL_STATE"
+}
+
+write_global_config() {
+  prepare_global_backup
+  mkdir -p "$GLOBAL_HOME"
+  chmod 700 "$GLOBAL_HOME"
+
+  local source_config="/dev/null"
+  local tmp="$GLOBAL_CONFIG.codex-newapi.tmp.$$"
+  if [ "$(sed -n '1p' "$GLOBAL_ORIGINAL_STATE")" = "present" ]; then
+    [ -f "$GLOBAL_BACKUP" ] || die "找不到原配置备份，已停止以避免覆盖现有配置"
+    source_config="$GLOBAL_BACKUP"
+  fi
+
+  umask 077
+  cat > "$tmp" <<EOF
+# New API managed defaults
+model = "$MODEL"
+model_provider = "newapi"
+model_reasoning_effort = "$REASONING"
+
+EOF
+
+  awk '
+    BEGIN { top_level = 1; skip_newapi = 0 }
+    /^[[:space:]]*\[/ {
+      top_level = 0
+      if ($0 ~ /^[[:space:]]*\[model_providers\.newapi([.][^]]+)?\][[:space:]]*$/) {
+        skip_newapi = 1
+        next
+      }
+      skip_newapi = 0
+    }
+    skip_newapi { next }
+    top_level && /^[[:space:]]*model[[:space:]]*=/ { next }
+    top_level && /^[[:space:]]*model_provider[[:space:]]*=/ { next }
+    top_level && /^[[:space:]]*model_reasoning_effort[[:space:]]*=/ { next }
+    { print }
+  ' "$source_config" >> "$tmp"
+
+  cat >> "$tmp" <<EOF
+
+[model_providers.newapi]
+name = "New API"
+base_url = "$BASE_URL"
+wire_api = "responses"
+request_max_retries = 4
+stream_max_retries = 10
+stream_idle_timeout_ms = 300000
+
+[model_providers.newapi.auth]
+command = "$AUTH_COMMAND"
+args = $AUTH_ARGS
+timeout_ms = 5000
+refresh_interval_ms = 0
+EOF
+
+  chmod 600 "$tmp"
+  mv "$tmp" "$GLOBAL_CONFIG"
+  log "默认 Codex 配置已切换到 New API"
+}
+
+restore_global_config() {
+  [ -f "$GLOBAL_ORIGINAL_STATE" ] || return 0
+
+  case "$(sed -n '1p' "$GLOBAL_ORIGINAL_STATE")" in
+    present)
+      [ -f "$GLOBAL_BACKUP" ] || die "找不到原配置备份，无法安全恢复"
+      mkdir -p "$GLOBAL_HOME"
+      cp -p "$GLOBAL_BACKUP" "$GLOBAL_CONFIG"
+      ;;
+    missing)
+      if [ -f "$GLOBAL_CONFIG" ]; then
+        mv "$GLOBAL_CONFIG" "$GLOBAL_CONFIG.newapi-removed.$(timestamp)"
+      fi
+      ;;
+    *)
+      die "无法识别原配置状态，已停止以避免误操作"
+      ;;
+  esac
+
+  rm -f "$GLOBAL_BACKUP" "$GLOBAL_ORIGINAL_STATE"
+}
+
+write_shell_wrapper() {
+  local rc_dir
+  rc_dir="$(dirname "$SHELL_RC")"
+  mkdir -p "$rc_dir"
+  if [ -f "$SHELL_RC" ]; then
+    backup_file "$SHELL_RC"
+  else
+    touch "$SHELL_RC"
+  fi
+  remove_managed_block "$SHELL_RC"
+
+  local quoted_home quoted_bin
+  printf -v quoted_home '%q' "$TARGET_HOME"
+  printf -v quoted_bin '%q' "$CODEX_BIN"
+
+  cat >> "$SHELL_RC" <<EOF
+
+$MANAGED_BEGIN
+# Terminal Codex defaults to the isolated New API provider.
+# The ChatGPT desktop app continues using ~/.codex and its official login.
+codex() {
+  CODEX_HOME=$quoted_home $quoted_bin "\$@"
+}
+$MANAGED_END
+EOF
+  log "Codex 默认入口已设置"
+}
+
+print_cli_summary() {
+  cat <<'EOF'
+
+方式 1 已启用：终端 Codex CLI 将使用 New API。
+ChatGPT 桌面端登录保持不变。
+
+重新打开终端，然后输入：
+  codex
+EOF
+}
+
+print_global_summary() {
+  cat <<'EOF'
+
+方式 2 已启用：默认 Codex 配置将使用 New API。
+请完全退出并重新打开受影响的 Codex 客户端。
+
+注意：New API 不会变成 ChatGPT 账号，也不会替代 ChatGPT 登录。
+EOF
+}
+
+credential_exists() {
+  if [ "$PLATFORM" = "macos" ]; then
+    security find-generic-password -a "$USER" -s "$KEY_SERVICE" >/dev/null 2>&1
+  elif command -v secret-tool >/dev/null 2>&1 && \
+       [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] && \
+       secret-tool lookup service "$KEY_SERVICE" account "$USER" >/dev/null 2>&1; then
+    return 0
+  else
+    [ -s "$TARGET_HOME/credentials/newapi.key" ]
+  fi
+}
+
+show_status() {
+  local mode credential
+  mode="$(get_mode)"
+  if credential_exists; then
+    credential="已保存"
+  else
+    credential="未保存"
+  fi
+
+  case "$mode" in
+    cli) printf '\n当前模式：方式 1，仅接管终端 Codex CLI\n' ;;
+    global) printf '\n当前模式：方式 2，接管默认 Codex 配置\n' ;;
+    *) printf '\n当前模式：官方默认\n' ;;
+  esac
+  printf 'New API 密钥：%s\n' "$credential"
+}
+
+install_cli_mode() {
+  if [ -f "$GLOBAL_ORIGINAL_STATE" ]; then
+    restore_global_config
+  fi
+  configure_credential 0
+  write_config
+  write_shell_wrapper
+  set_mode "cli"
+  print_cli_summary
+}
+
+install_global_mode() {
+  remove_shell_wrapper
+  configure_credential 0
+  write_global_config
+  set_mode "global"
+  print_global_summary
+}
+
+rotate_credential() {
+  configure_credential 1
+  printf '\nNew API 密钥已更换。\n'
+}
+
+delete_credential() {
+  if [ "$PLATFORM" = "macos" ]; then
+    security delete-generic-password -a "$USER" -s "$KEY_SERVICE" >/dev/null 2>&1 || true
+  else
+    if command -v secret-tool >/dev/null 2>&1 && \
+       [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+      secret-tool clear service "$KEY_SERVICE" account "$USER" >/dev/null 2>&1 || true
+    fi
+    if [ -f "$TARGET_HOME/credentials/newapi.key" ]; then
+      rm -f "$TARGET_HOME/credentials/newapi.key"
+    fi
+  fi
+}
+
+restore_default() {
+  local delete_key="${1:-0}"
+  remove_shell_wrapper
+  restore_global_config
+
+  if [ "$delete_key" -eq 1 ]; then
+    delete_credential
+  fi
+
+  if [ -d "$TARGET_HOME" ]; then
+    mv "$TARGET_HOME" "${TARGET_HOME}.removed.$(timestamp)"
+  fi
+  rm -f "$MODE_FILE"
+
+  cat <<'EOF'
+
+已恢复官方默认配置。
+请重新打开终端或 Codex 客户端。
+EOF
+}
+
+confirm() {
+  local answer=""
+  printf '%s [y/N] ' "$1"
+  IFS= read -r answer <&3
+  case "$answer" in
+    y|Y|yes|YES) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+pause_menu() {
+  printf '\n按回车返回菜单...'
+  IFS= read -r _pause <&3
+}
+
+interactive_menu() {
+  [ -t 3 ] || die "交互菜单需要在终端中运行"
+
+  while true; do
+    cat <<'EOF'
+
+Codex New API 管理
+
+  1. 仅接管终端 Codex CLI（推荐）
+     ChatGPT 桌面端登录和 Remote Control 保持不变
+
+  2. 接管默认 Codex 配置
+     可影响共用 ~/.codex 的客户端，但不会替代 ChatGPT 账号
+
+  3. 更换 New API 密钥
+  4. 查看当前状态
+  5. 移除 New API 配置，恢复官方默认
+  0. 退出
+EOF
+    printf '\n请选择：'
+    local choice=""
+    IFS= read -r choice <&3
+
+    case "$choice" in
+      1)
+        install_cli_mode
+        pause_menu
+        ;;
+      2)
+        printf '\n方式 2 会修改默认 Codex 配置，并可能影响桌面 Codex。\n'
+        printf 'ChatGPT 账号、云端功能和 Remote Control 不能由 New API 替代。\n'
+        if confirm "继续使用方式 2？"; then
+          install_global_mode
+        else
+          printf '\n已取消。\n'
+        fi
+        pause_menu
+        ;;
+      3)
+        rotate_credential
+        pause_menu
+        ;;
+      4)
+        show_status
+        pause_menu
+        ;;
+      5)
+        if confirm "恢复官方默认？"; then
+          local delete_key=0
+          if confirm "同时删除已保存的 New API 密钥？"; then
+            delete_key=1
+          fi
+          restore_default "$delete_key"
+        else
+          printf '\n已取消。\n'
+        fi
+        pause_menu
+        ;;
+      0)
+        printf '\n已退出。\n'
+        return
+        ;;
+      *)
+        printf '\n请输入 0–5。\n'
+        ;;
+    esac
+  done
+}
+
+detect_platform
+select_shell_rc
+normalize_base_url
+LINUX_ID="${LINUX_ID:-}"
+if [ "$ACTION" = "restore" ] || [ "$ACTION" = "uninstall" ]; then
+  CODEX_BIN="$(command -v codex 2>/dev/null || true)"
+else
+  find_codex_binary
+fi
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  cat <<EOF
+Dry run only; no files or credentials changed.
+Action:         $ACTION
+Platform:       $PLATFORM${LINUX_ID:+ ($LINUX_ID)}
+Codex binary:   $CODEX_BIN
+Base URL:       $BASE_URL
+Model:          $MODEL
+Reasoning:      $REASONING
+Target home:    $TARGET_HOME
+Shell startup:  $SHELL_RC
+EOF
+  exit 0
+fi
+
+case "$ACTION" in
+  menu)
+    interactive_menu
+    ;;
+  install)
+    print_install_expectations
+    install_cli_mode
+    ;;
+  global)
+    printf '\n方式 2 会修改默认 Codex 配置，但不会替代 ChatGPT 账号。\n'
+    if confirm "继续使用方式 2？"; then
+      install_global_mode
+    else
+      printf '\n已取消。\n'
+    fi
+    ;;
+  rotate-key)
+    rotate_credential
+    ;;
+  status)
+    show_status
+    ;;
+  restore|uninstall)
+    restore_default 0
+    ;;
+esac

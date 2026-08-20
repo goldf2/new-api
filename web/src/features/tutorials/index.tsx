@@ -23,8 +23,10 @@ import {
   KeyRound,
   Laptop,
   Network,
+  Settings,
   ShieldCheck,
   TerminalSquare,
+  UserRound,
 } from 'lucide-react'
 import { type ReactNode, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -40,8 +42,16 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useIsAdmin } from '@/hooks/use-admin'
 
-import { buildCodexConfig, buildResponsesCurl, getApiBaseUrl } from './lib'
+import {
+  buildCodexConfig,
+  buildResponsesCurl,
+  buildUnixInstallerCommand,
+  buildWindowsInstallerCommand,
+  getApiBaseUrl,
+  getSiteOrigin,
+} from './lib'
 
 type GuideStepProps = {
   index: number
@@ -121,19 +131,64 @@ function Notice({
 
 export function Tutorials() {
   const { t } = useTranslation()
-  const baseUrl = useMemo(
+  const isAdmin = useIsAdmin()
+  const origin = useMemo(
     () =>
-      getApiBaseUrl(
+      getSiteOrigin(
         typeof window === 'undefined'
           ? 'https://your-domain.example'
           : window.location.origin
       ),
     []
   )
+  const baseUrl = useMemo(() => getApiBaseUrl(origin), [origin])
   const curlExample = useMemo(() => buildResponsesCurl(baseUrl), [baseUrl])
   const codexConfig = useMemo(() => buildCodexConfig(baseUrl), [baseUrl])
+  const unixInstaller = useMemo(
+    () => buildUnixInstallerCommand(origin, baseUrl),
+    [baseUrl, origin]
+  )
+  const windowsInstaller = useMemo(
+    () => buildWindowsInstallerCommand(origin, baseUrl),
+    [baseUrl, origin]
+  )
 
-  const steps: GuideStepProps[] = [
+  const userSteps: GuideStepProps[] = [
+    {
+      index: 1,
+      title: t('Create your personal API key'),
+      description: t(
+        'Open API Keys, create a key for your own account, and keep it private.'
+      ),
+      icon: KeyRound,
+    },
+    {
+      index: 2,
+      title: t('Run the command for your system'),
+      description: t(
+        'Copy the one-line command below into Terminal or PowerShell.'
+      ),
+      icon: TerminalSquare,
+    },
+    {
+      index: 3,
+      title: t('Choose CLI-only mode'),
+      description: t(
+        'Choose option 1 to keep the official desktop login and Remote Control unchanged.'
+      ),
+      icon: ShieldCheck,
+    },
+    {
+      index: 4,
+      title: t('Reopen the terminal and run Codex'),
+      description: t(
+        'After setup finishes, open a new terminal window and enter codex.'
+      ),
+      icon: Laptop,
+    },
+  ]
+
+  const adminSteps: GuideStepProps[] = [
     {
       index: 1,
       title: t('Create an API key'),
@@ -176,164 +231,255 @@ export function Tutorials() {
         </Button>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
-        <div className='mx-auto flex w-full max-w-6xl flex-col gap-4 pb-6'>
-          <Card className='border-primary/20 from-primary/10 via-card to-card relative overflow-hidden bg-linear-to-br'>
-            <CardHeader>
-              <div className='flex items-start gap-3'>
-                <div className='bg-primary text-primary-foreground flex size-10 shrink-0 items-center justify-center rounded-xl shadow-sm'>
-                  <BookOpen className='size-5' aria-hidden='true' />
-                </div>
-                <div>
-                  <CardTitle className='text-lg sm:text-xl'>
-                    {t('Connect your client in minutes')}
-                  </CardTitle>
-                  <CardDescription className='mt-1 max-w-3xl leading-relaxed'>
+        <Tabs defaultValue='user' className='mx-auto w-full max-w-6xl'>
+          <TabsList className='mb-4 w-full justify-start'>
+            <TabsTrigger value='user'>
+              <UserRound data-icon='inline-start' />
+              {t('User guide')}
+            </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value='admin'>
+                <Settings data-icon='inline-start' />
+                {t('Administrator guide')}
+              </TabsTrigger>
+            )}
+          </TabsList>
+
+          <TabsContent value='user'>
+            <div className='flex flex-col gap-4 pb-6'>
+              <Card className='border-primary/20 from-primary/10 via-card to-card relative overflow-hidden bg-linear-to-br'>
+                <CardHeader>
+                  <div className='flex items-start gap-3'>
+                    <div className='bg-primary text-primary-foreground flex size-10 shrink-0 items-center justify-center rounded-xl shadow-sm'>
+                      <UserRound className='size-5' aria-hidden='true' />
+                    </div>
+                    <div>
+                      <CardTitle className='text-lg sm:text-xl'>
+                        {t('Start using Codex with one command')}
+                      </CardTitle>
+                      <CardDescription className='mt-1 max-w-3xl leading-relaxed'>
+                        {t(
+                          'This guide is for regular users. You only need your personal API key and the command for your operating system.'
+                        )}
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t('User quick start')}</CardTitle>
+                  <CardDescription>
                     {t(
-                      'Follow the quick start, then copy the configuration for your client and operating system.'
+                      'The installer opens an interactive menu and does not change your configuration until you choose a mode.'
                     )}
                   </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className='bg-background/80 flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between'>
-                <div className='min-w-0'>
-                  <p className='text-muted-foreground text-xs font-medium uppercase'>
-                    {t('Your API base URL')}
-                  </p>
-                  <code className='mt-1 block truncate text-sm font-semibold'>
-                    {baseUrl}
-                  </code>
-                </div>
-                <CopyButton
-                  value={baseUrl}
-                  variant='outline'
-                  size='sm'
-                  className='w-full sm:w-auto'
-                  tooltip={t('Copy base URL')}
-                  aria-label={t('Copy base URL')}
-                >
-                  {t('Copy base URL')}
-                </CopyButton>
-              </div>
-            </CardContent>
-          </Card>
+                </CardHeader>
+                <CardContent className='grid gap-3 md:grid-cols-2'>
+                  {userSteps.map((step) => (
+                    <GuideStep key={step.index} {...step} />
+                  ))}
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>{t('Quick start')}</CardTitle>
-              <CardDescription>
-                {t(
-                  'Complete these four steps before connecting a production client.'
-                )}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className='grid gap-3 md:grid-cols-2'>
-              {steps.map((step) => (
-                <GuideStep key={step.index} {...step} />
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>{t('Client configuration')}</CardTitle>
-              <CardDescription>
-                {t(
-                  'Choose the guide that matches the client you want to connect.'
-                )}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue='api'>
-                <TabsList className='w-full justify-start overflow-x-auto'>
-                  <TabsTrigger value='api'>
-                    <Network data-icon='inline-start' />
-                    {t('OpenAI-compatible API')}
-                  </TabsTrigger>
-                  <TabsTrigger value='codex'>
-                    <Laptop data-icon='inline-start' />
-                    {t('Codex CLI')}
-                  </TabsTrigger>
-                  <TabsTrigger value='troubleshooting'>
-                    <CircleAlert data-icon='inline-start' />
-                    {t('Troubleshooting')}
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value='api' className='mt-4 space-y-3'>
-                  <Notice icon={ShieldCheck} title={t('Use a New API key')}>
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t('One-click setup')}</CardTitle>
+                  <CardDescription>
                     {t(
-                      'Replace the placeholders with a key created on this site and a model ID available to your account. Do not paste an upstream provider key here.'
+                      'Run only the command that matches your operating system.'
                     )}
-                  </Notice>
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className='space-y-3'>
                   <CodeExample
-                    title={t('Responses API request')}
-                    value={curlExample}
+                    title={t('macOS / Linux')}
+                    value={unixInstaller}
                   />
-                </TabsContent>
-
-                <TabsContent value='codex' className='mt-4 space-y-3'>
-                  <Notice
-                    icon={ShieldCheck}
-                    title={t('Keep the official desktop login')}
-                  >
-                    {t(
-                      'Use a dedicated CLI profile and leave auth.json unchanged. Codex Desktop can continue using the official account login.'
-                    )}
-                  </Notice>
                   <CodeExample
-                    title='~/.codex/config.toml'
-                    value={codexConfig}
+                    title={t('Windows PowerShell')}
+                    value={windowsInstaller}
                   />
-                  <div className='grid gap-3 md:grid-cols-2'>
-                    <CodeExample
-                      title={t('macOS / Linux')}
-                      value={
-                        'export NEWAPI_API_KEY="sk-YOUR_NEW_API_KEY"\ncodex --profile newapi'
-                      }
-                    />
-                    <CodeExample
-                      title={t('Windows PowerShell')}
-                      value={
-                        '$env:NEWAPI_API_KEY="sk-YOUR_NEW_API_KEY"\ncodex --profile newapi'
-                      }
-                    />
-                  </div>
-                  <p className='text-muted-foreground text-xs leading-relaxed'>
+                  <Notice icon={ShieldCheck} title={t('What happens next')}>
                     {t(
-                      'Replace YOUR_MODEL_ID with an enabled model shown on the Models page. The provider name newapi is a local identifier defined by the configuration block above.'
+                      'The script asks which mode to use and then requests your New API key. Key input is hidden. Choose option 1 unless you intentionally want to change the shared default Codex configuration.'
                     )}
-                  </p>
-                </TabsContent>
+                  </Notice>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
 
-                <TabsContent
-                  value='troubleshooting'
-                  className='mt-4 grid gap-3 md:grid-cols-3'
-                >
-                  <Notice icon={CircleAlert} title='503 No available channel'>
-                    {t(
-                      'The selected model has no available channel in your group. Choose another model or contact the administrator.'
-                    )}
-                  </Notice>
-                  <Notice
-                    icon={CircleAlert}
-                    title='400 Stream must be set to true'
-                  >
-                    {t(
-                      'Enable streaming in the client or send stream: true in the Responses request.'
-                    )}
-                  </Notice>
-                  <Notice icon={CircleAlert} title='401 Unauthorized'>
-                    {t(
-                      'Confirm that the key was generated on this site, is enabled, and was copied without extra spaces.'
-                    )}
-                  </Notice>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-        </div>
+          {isAdmin && (
+            <TabsContent value='admin'>
+              <div className='flex flex-col gap-4 pb-6'>
+                <Card className='border-primary/20 from-primary/10 via-card to-card relative overflow-hidden bg-linear-to-br'>
+                  <CardHeader>
+                    <div className='flex items-start gap-3'>
+                      <div className='bg-primary text-primary-foreground flex size-10 shrink-0 items-center justify-center rounded-xl shadow-sm'>
+                        <BookOpen className='size-5' aria-hidden='true' />
+                      </div>
+                      <div>
+                        <CardTitle className='text-lg sm:text-xl'>
+                          {t('Connect your client in minutes')}
+                        </CardTitle>
+                        <CardDescription className='mt-1 max-w-3xl leading-relaxed'>
+                          {t(
+                            'Follow the quick start, then copy the configuration for your client and operating system.'
+                          )}
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className='bg-background/80 flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between'>
+                      <div className='min-w-0'>
+                        <p className='text-muted-foreground text-xs font-medium uppercase'>
+                          {t('Your API base URL')}
+                        </p>
+                        <code className='mt-1 block truncate text-sm font-semibold'>
+                          {baseUrl}
+                        </code>
+                      </div>
+                      <CopyButton
+                        value={baseUrl}
+                        variant='outline'
+                        size='sm'
+                        className='w-full sm:w-auto'
+                        tooltip={t('Copy base URL')}
+                        aria-label={t('Copy base URL')}
+                      >
+                        {t('Copy base URL')}
+                      </CopyButton>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>{t('Quick start')}</CardTitle>
+                    <CardDescription>
+                      {t(
+                        'Complete these four steps before connecting a production client.'
+                      )}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className='grid gap-3 md:grid-cols-2'>
+                    {adminSteps.map((step) => (
+                      <GuideStep key={step.index} {...step} />
+                    ))}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>{t('Client configuration')}</CardTitle>
+                    <CardDescription>
+                      {t(
+                        'Choose the guide that matches the client you want to connect.'
+                      )}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Tabs defaultValue='api'>
+                      <TabsList className='w-full justify-start overflow-x-auto'>
+                        <TabsTrigger value='api'>
+                          <Network data-icon='inline-start' />
+                          {t('OpenAI-compatible API')}
+                        </TabsTrigger>
+                        <TabsTrigger value='codex'>
+                          <Laptop data-icon='inline-start' />
+                          {t('Codex CLI')}
+                        </TabsTrigger>
+                        <TabsTrigger value='troubleshooting'>
+                          <CircleAlert data-icon='inline-start' />
+                          {t('Troubleshooting')}
+                        </TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value='api' className='mt-4 space-y-3'>
+                        <Notice
+                          icon={ShieldCheck}
+                          title={t('Use a New API key')}
+                        >
+                          {t(
+                            'Replace the placeholders with a key created on this site and a model ID available to your account. Do not paste an upstream provider key here.'
+                          )}
+                        </Notice>
+                        <CodeExample
+                          title={t('Responses API request')}
+                          value={curlExample}
+                        />
+                      </TabsContent>
+
+                      <TabsContent value='codex' className='mt-4 space-y-3'>
+                        <Notice
+                          icon={ShieldCheck}
+                          title={t('Keep the official desktop login')}
+                        >
+                          {t(
+                            'Use a dedicated CLI profile and leave auth.json unchanged. Codex Desktop can continue using the official account login.'
+                          )}
+                        </Notice>
+                        <CodeExample
+                          title='~/.codex/config.toml'
+                          value={codexConfig}
+                        />
+                        <div className='grid gap-3 md:grid-cols-2'>
+                          <CodeExample
+                            title={t('macOS / Linux')}
+                            value={
+                              'export NEWAPI_API_KEY="sk-YOUR_NEW_API_KEY"\ncodex --profile newapi'
+                            }
+                          />
+                          <CodeExample
+                            title={t('Windows PowerShell')}
+                            value={
+                              '$env:NEWAPI_API_KEY="sk-YOUR_NEW_API_KEY"\ncodex --profile newapi'
+                            }
+                          />
+                        </div>
+                        <p className='text-muted-foreground text-xs leading-relaxed'>
+                          {t(
+                            'Replace YOUR_MODEL_ID with an enabled model shown on the Models page. The provider name newapi is a local identifier defined by the configuration block above.'
+                          )}
+                        </p>
+                      </TabsContent>
+
+                      <TabsContent
+                        value='troubleshooting'
+                        className='mt-4 grid gap-3 md:grid-cols-3'
+                      >
+                        <Notice
+                          icon={CircleAlert}
+                          title='503 No available channel'
+                        >
+                          {t(
+                            'The selected model has no available channel in your group. Choose another model or contact the administrator.'
+                          )}
+                        </Notice>
+                        <Notice
+                          icon={CircleAlert}
+                          title='400 Stream must be set to true'
+                        >
+                          {t(
+                            'Enable streaming in the client or send stream: true in the Responses request.'
+                          )}
+                        </Notice>
+                        <Notice icon={CircleAlert} title='401 Unauthorized'>
+                          {t(
+                            'Confirm that the key was generated on this site, is enabled, and was copied without extra spaces.'
+                          )}
+                        </Notice>
+                      </TabsContent>
+                    </Tabs>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          )}
+        </Tabs>
       </SectionPageLayout.Content>
     </SectionPageLayout>
   )

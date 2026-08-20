@@ -18,7 +18,13 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { describe, expect, test } from 'vitest'
 
-import { buildCodexConfig, buildResponsesCurl, getApiBaseUrl } from '../lib'
+import {
+  buildCodexConfig,
+  buildResponsesCurl,
+  buildUnixInstallerCommand,
+  buildWindowsInstallerCommand,
+  getApiBaseUrl,
+} from '../lib'
 
 describe('tutorial configuration examples', () => {
   test('normalizes the current origin into an API base URL', () => {
@@ -39,5 +45,20 @@ describe('tutorial configuration examples', () => {
     expect(codexConfig).toContain('base_url = "https://gateway.example/v1"')
     expect(codexConfig).toContain('[profiles.newapi]')
     expect(codexConfig.startsWith('[model_providers.newapi]')).toBe(true)
+  })
+
+  test('builds one-line installers hosted by the current site', () => {
+    const origin = 'https://gateway.example/'
+    const baseUrl = getApiBaseUrl(origin)
+
+    expect(buildUnixInstallerCommand(origin, baseUrl)).toBe(
+      'curl -fsSL "https://gateway.example/scripts/setup-codex-newapi.sh" | bash -s -- --base-url "https://gateway.example/v1"'
+    )
+    expect(buildWindowsInstallerCommand(origin, baseUrl)).toContain(
+      'https://gateway.example/scripts/setup-codex-newapi.ps1'
+    )
+    expect(buildWindowsInstallerCommand(origin, baseUrl)).toContain(
+      '-BaseUrl "https://gateway.example/v1"'
+    )
   })
 })
