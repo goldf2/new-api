@@ -66,16 +66,22 @@ describe('tutorial configuration examples', () => {
       'https://gateway.example/scripts/setup-codex-newapi.ps1'
     )
     expect(buildWindowsInstallerCommand(origin, baseUrl)).toContain(
-      '-BaseUrl "https://gateway.example/v1"'
+      "-BaseUrl 'https://gateway.example/v1'"
     )
     expect(buildWindowsInstallerCommand(origin, baseUrl)).toContain(
-      '.TrimStart([char]0xFEFF)'
+      "$scriptPath = Join-Path $env:TEMP 'setup-codex-newapi.ps1'"
     )
     expect(buildWindowsInstallerCommand(origin, baseUrl)).toContain(
-      '[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12'
+      'curl.exe --fail --location --retry 3 --tlsv1.2'
     )
     expect(buildWindowsInstallerCommand(origin, baseUrl)).toContain(
-      'Invoke-RestMethod -Uri "https://gateway.example/scripts/setup-codex-newapi.ps1"'
+      '& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath'
+    )
+    expect(buildWindowsInstallerCommand(origin, baseUrl)).not.toContain(
+      'Invoke-RestMethod'
+    )
+    expect(buildWindowsInstallerCommand(origin, baseUrl)).not.toContain(
+      'ScriptBlock'
     )
   })
 

@@ -39,7 +39,7 @@ export function buildWindowsInstallerCommand(
   baseUrl: string
 ): string {
   const siteOrigin = getSiteOrigin(origin)
-  return `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $script = (Invoke-RestMethod -Uri "${siteOrigin}/scripts/setup-codex-newapi.ps1").TrimStart([char]0xFEFF); & ([ScriptBlock]::Create($script)) -BaseUrl "${baseUrl}"`
+  return `$scriptPath = Join-Path $env:TEMP 'setup-codex-newapi.ps1'; curl.exe --fail --location --retry 3 --tlsv1.2 '${siteOrigin}/scripts/setup-codex-newapi.ps1' --output $scriptPath; if ($LASTEXITCODE -ne 0) { throw '脚本下载失败，请检查网络后重试。' }; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath -BaseUrl '${baseUrl}'`
 }
 
 export function buildResponsesCurl(baseUrl: string): string {
