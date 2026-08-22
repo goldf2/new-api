@@ -39,7 +39,7 @@ export function buildWindowsInstallerCommand(
   baseUrl: string
 ): string {
   const siteOrigin = getSiteOrigin(origin)
-  return `$script = Invoke-RestMethod "${siteOrigin}/scripts/setup-codex-newapi.ps1"; & ([ScriptBlock]::Create($script)) -BaseUrl "${baseUrl}"`
+  return `$script = (Invoke-RestMethod "${siteOrigin}/scripts/setup-codex-newapi.ps1").TrimStart([char]0xFEFF); & ([ScriptBlock]::Create($script)) -BaseUrl "${baseUrl}"`
 }
 
 export function buildResponsesCurl(baseUrl: string): string {

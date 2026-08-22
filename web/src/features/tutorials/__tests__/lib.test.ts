@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { readFileSync } from 'node:fs'
+
 import { describe, expect, test } from 'vitest'
 
 import {
@@ -66,5 +68,14 @@ describe('tutorial configuration examples', () => {
     expect(buildWindowsInstallerCommand(origin, baseUrl)).toContain(
       '-BaseUrl "https://gateway.example/v1"'
     )
+    expect(buildWindowsInstallerCommand(origin, baseUrl)).toContain(
+      '.TrimStart([char]0xFEFF)'
+    )
+  })
+
+  test('serves the Windows installer without a UTF-8 byte-order mark', () => {
+    const script = readFileSync('public/scripts/setup-codex-newapi.ps1')
+
+    expect(script.subarray(0, 3)).toEqual(Buffer.from('[Cm'))
   })
 })
