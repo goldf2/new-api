@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   CheckCircle2,
   ExternalLink,
+  KeyRound,
   Laptop,
   MonitorCog,
   ShieldCheck,
@@ -82,6 +83,8 @@ function PlatformGuide(props: {
   requirement: string
   installCommand: string
   installDescription: string
+  setupCommand: string
+  setupDescription: string
 }) {
   const { t } = useTranslation()
 
@@ -147,11 +150,65 @@ function PlatformGuide(props: {
           command={VERIFY_COMMAND}
         />
       </div>
+
+      <div className='space-y-3 rounded-xl border p-4'>
+        <div className='flex items-center gap-3'>
+          <div className='bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-lg'>
+            <KeyRound className='size-4' aria-hidden='true' />
+          </div>
+          <p className='text-sm font-semibold'>{t('Connect to New API')}</p>
+        </div>
+
+        <div className='bg-background/70 flex gap-3 rounded-xl border p-3'>
+          <div className='bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-lg font-mono text-xs'>
+            3
+          </div>
+          <div>
+            <p className='text-sm font-medium'>
+              {t('Create your personal API key')}
+            </p>
+            <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
+              {t(
+                'Open API Keys, create a key for your own account, and keep it private.'
+              )}
+            </p>
+          </div>
+        </div>
+
+        <InstallCommand
+          label={t('4. Run the one-click setup command')}
+          command={props.setupCommand}
+          description={props.setupDescription}
+        />
+
+        <div className='bg-primary/5 flex gap-3 rounded-xl border p-3'>
+          <ShieldCheck
+            className='text-primary mt-0.5 size-4 shrink-0'
+            aria-hidden='true'
+          />
+          <div>
+            <p className='text-sm font-medium'>{t('What happens next')}</p>
+            <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
+              {t(
+                'The script asks which mode to use and then requests your New API key. Key input is hidden. Option 1 is recommended. Option 2 changes the shared default configuration and disables Codex App, Cloud and Remote Control until you restore the official default.'
+              )}
+            </p>
+          </div>
+        </div>
+
+        <InstallCommand
+          label={t('5. Reopen the terminal and start Codex')}
+          command='codex'
+        />
+      </div>
     </div>
   )
 }
 
-export function CodexInstallationGuide() {
+export function CodexInstallationGuide(props: {
+  unixSetupCommand: string
+  windowsSetupCommand: string
+}) {
   const { t } = useTranslation()
 
   return (
@@ -205,6 +262,10 @@ export function CodexInstallationGuide() {
               installDescription={t(
                 'Recommended. This installer does not require you to install Node.js first.'
               )}
+              setupCommand={props.unixSetupCommand}
+              setupDescription={t(
+                'Use the copy button, paste the command into Terminal, and run it.'
+              )}
             />
           </TabsContent>
 
@@ -218,6 +279,10 @@ export function CodexInstallationGuide() {
               installCommand={WINDOWS_INSTALL_COMMAND}
               installDescription={t(
                 'Recommended. Run this command in PowerShell and reopen PowerShell after it finishes.'
+              )}
+              setupCommand={props.windowsSetupCommand}
+              setupDescription={t(
+                'Use the copy button. If you paste through remote desktop, verify that the URL remains plain text and was not converted into a Markdown link.'
               )}
             />
           </TabsContent>

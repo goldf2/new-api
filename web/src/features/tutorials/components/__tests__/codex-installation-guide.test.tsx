@@ -22,14 +22,21 @@ import { describe, expect, test } from 'vitest'
 
 import { CodexInstallationGuide } from '../codex-installation-guide'
 
+const guideProps = {
+  unixSetupCommand: 'UNIX_SETUP_COMMAND',
+  windowsSetupCommand: 'WINDOWS_SETUP_COMMAND',
+}
+
 describe('Codex installation guide', () => {
   test('shows the official macOS and Linux installer by default', () => {
-    render(<CodexInstallationGuide />)
+    render(<CodexInstallationGuide {...guideProps} />)
 
     expect(
       screen.getByText('curl -fsSL https://chatgpt.com/codex/install.sh | sh')
     ).toBeInTheDocument()
     expect(screen.getByText('codex --version')).toBeInTheDocument()
+    expect(screen.getByText('UNIX_SETUP_COMMAND')).toBeInTheDocument()
+    expect(screen.queryByText('WINDOWS_SETUP_COMMAND')).not.toBeInTheDocument()
     expect(
       screen.getByText(/Do not delete the .codex folder/)
     ).toBeInTheDocument()
@@ -37,7 +44,7 @@ describe('Codex installation guide', () => {
 
   test('switches to the official Windows installer', async () => {
     const user = userEvent.setup()
-    render(<CodexInstallationGuide />)
+    render(<CodexInstallationGuide {...guideProps} />)
 
     await user.click(screen.getByRole('tab', { name: 'Windows' }))
 
@@ -46,10 +53,12 @@ describe('Codex installation guide', () => {
         'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"'
       )
     ).toBeInTheDocument()
+    expect(screen.getByText('WINDOWS_SETUP_COMMAND')).toBeInTheDocument()
+    expect(screen.queryByText('UNIX_SETUP_COMMAND')).not.toBeInTheDocument()
   })
 
   test('links only to official OpenAI installation documentation', () => {
-    render(<CodexInstallationGuide />)
+    render(<CodexInstallationGuide {...guideProps} />)
 
     const guideButton = screen.getByRole('button', {
       name: 'Open the official Codex guide',

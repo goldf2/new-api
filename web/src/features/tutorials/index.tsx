@@ -147,49 +147,6 @@ export function Tutorials() {
     [baseUrl, origin]
   )
 
-  const userSteps: GuideStepProps[] = [
-    {
-      index: 1,
-      title: t('Install Codex CLI'),
-      description: t(
-        'Use the installation guide above and confirm that codex --version works.'
-      ),
-      icon: TerminalSquare,
-    },
-    {
-      index: 2,
-      title: t('Create your personal API key'),
-      description: t(
-        'Open API Keys, create a key for your own account, and keep it private.'
-      ),
-      icon: KeyRound,
-    },
-    {
-      index: 3,
-      title: t('Run the command for your system'),
-      description: t(
-        'Use the copy button below. If you paste through remote desktop, verify that the URL remains plain text and was not converted into a Markdown link.'
-      ),
-      icon: TerminalSquare,
-    },
-    {
-      index: 4,
-      title: t('Choose CLI-only mode'),
-      description: t(
-        'Choose option 1 to keep Codex App, Cloud and Remote Control on the official login.'
-      ),
-      icon: ShieldCheck,
-    },
-    {
-      index: 5,
-      title: t('Reopen the terminal and run Codex'),
-      description: t(
-        'After setup finishes, open a new terminal window and enter codex.'
-      ),
-      icon: Laptop,
-    },
-  ]
-
   const adminSteps: GuideStepProps[] = [
     {
       index: 1,
@@ -269,61 +226,10 @@ export function Tutorials() {
                 </CardHeader>
               </Card>
 
-              <CodexInstallationGuide />
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t('User quick start')}</CardTitle>
-                  <CardDescription>
-                    {t(
-                      'The installer opens an interactive menu and does not change your configuration until you choose a mode.'
-                    )}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className='grid gap-3 md:grid-cols-2'>
-                  {userSteps.map((step) => (
-                    <GuideStep key={step.index} {...step} />
-                  ))}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t('One-click setup')}</CardTitle>
-                  <CardDescription>
-                    {t(
-                      'Run only the command that matches your operating system.'
-                    )}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className='space-y-3'>
-                  <Tabs defaultValue='unix'>
-                    <TabsList className='grid w-full grid-cols-2 group-data-horizontal/tabs:h-auto'>
-                      <TabsTrigger value='unix'>
-                        {t('macOS / Linux')}
-                      </TabsTrigger>
-                      <TabsTrigger value='windows'>{t('Windows')}</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value='unix' className='mt-3'>
-                      <CodeExample
-                        title={t('macOS / Linux')}
-                        value={unixInstaller}
-                      />
-                    </TabsContent>
-                    <TabsContent value='windows' className='mt-3'>
-                      <CodeExample
-                        title={t('Windows PowerShell')}
-                        value={windowsInstaller}
-                      />
-                    </TabsContent>
-                  </Tabs>
-                  <Notice icon={ShieldCheck} title={t('What happens next')}>
-                    {t(
-                      'The script asks which mode to use and then requests your New API key. Key input is hidden. Option 1 is recommended. Option 2 changes the shared default configuration and disables Codex App, Cloud and Remote Control until you restore the official default.'
-                    )}
-                  </Notice>
-                </CardContent>
-              </Card>
+              <CodexInstallationGuide
+                unixSetupCommand={unixInstaller}
+                windowsSetupCommand={windowsInstaller}
+              />
             </div>
           </TabsContent>
 
