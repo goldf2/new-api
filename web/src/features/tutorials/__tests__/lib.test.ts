@@ -87,9 +87,9 @@ describe('tutorial configuration examples', () => {
     expect(windowsCommand).not.toContain('ScriptBlock')
   })
 
-  test('serves the Windows installer without a UTF-8 byte-order mark', () => {
+  test('serves the Windows installer with a UTF-8 byte-order mark', () => {
     const script = readFileSync('public/scripts/setup-codex-newapi.ps1')
 
-    expect(script.subarray(0, 3)).toEqual(Buffer.from('[Cm'))
+    expect(script.subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]))
   })
 })

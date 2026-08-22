@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Position = 0)]
     [ValidateSet('Menu', 'InstallCli', 'InstallGlobal', 'RotateKey', 'Status', 'Restore')]
