@@ -74,7 +74,7 @@ describe('tutorial configuration examples', () => {
       "$scriptPath = Join-Path $env:TEMP 'setup-codex-newapi.ps1'"
     )
     expect(windowsCommand).toContain(
-      'curl.exe --fail --location --retry 3 --http1.1 --ssl-no-revoke'
+      'curl.exe --ipv4 --fail --location --retry 3 --http1.1 --ssl-no-revoke'
     )
     expect(windowsCommand).toContain(
       'if ($LASTEXITCODE -ne 0) { Remove-Item -LiteralPath $scriptPath -Force -ErrorAction SilentlyContinue; Start-BitsTransfer -Source $scriptUrl -Destination $scriptPath }'
