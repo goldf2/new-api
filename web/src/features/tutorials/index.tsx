@@ -44,7 +44,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useIsAdmin } from '@/hooks/use-admin'
 
-import { ClientPrerequisite } from './components/client-prerequisite'
+import { CodexInstallationGuide } from './components/codex-installation-guide'
 import {
   buildCodexConfig,
   buildResponsesCurl,
@@ -150,6 +150,14 @@ export function Tutorials() {
   const userSteps: GuideStepProps[] = [
     {
       index: 1,
+      title: t('Install Codex CLI'),
+      description: t(
+        'Use the installation guide above and confirm that codex --version works.'
+      ),
+      icon: TerminalSquare,
+    },
+    {
+      index: 2,
       title: t('Create your personal API key'),
       description: t(
         'Open API Keys, create a key for your own account, and keep it private.'
@@ -157,7 +165,7 @@ export function Tutorials() {
       icon: KeyRound,
     },
     {
-      index: 2,
+      index: 3,
       title: t('Run the command for your system'),
       description: t(
         'Copy the one-line command below into Terminal or PowerShell.'
@@ -165,7 +173,7 @@ export function Tutorials() {
       icon: TerminalSquare,
     },
     {
-      index: 3,
+      index: 4,
       title: t('Choose CLI-only mode'),
       description: t(
         'Choose option 1 to keep the official desktop login and Remote Control unchanged.'
@@ -173,7 +181,7 @@ export function Tutorials() {
       icon: ShieldCheck,
     },
     {
-      index: 4,
+      index: 5,
       title: t('Reopen the terminal and run Codex'),
       description: t(
         'After setup finishes, open a new terminal window and enter codex.'
@@ -261,39 +269,7 @@ export function Tutorials() {
                 </CardHeader>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t('Install the client first')}</CardTitle>
-                  <CardDescription>
-                    {t(
-                      'Codex CLI is required for one-click setup. ChatGPT desktop is optional.'
-                    )}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className='grid gap-3 md:grid-cols-2'>
-                  <ClientPrerequisite
-                    title={t('Codex CLI')}
-                    status={t('Required')}
-                    description={t(
-                      'Install Codex from the official guide, then run codex --version to confirm it is available.'
-                    )}
-                    href='https://learn.chatgpt.com/docs/codex/cli'
-                    linkLabel={t('Open Codex installation guide')}
-                    icon={TerminalSquare}
-                    command='codex --version'
-                  />
-                  <ClientPrerequisite
-                    title={t('ChatGPT desktop')}
-                    status={t('Optional')}
-                    description={t(
-                      'Install the official desktop app only if you need it. It still uses your ChatGPT account and is not required for New API CLI access.'
-                    )}
-                    href='https://learn.chatgpt.com/docs/app'
-                    linkLabel={t('Open ChatGPT download page')}
-                    icon={Laptop}
-                  />
-                </CardContent>
-              </Card>
+              <CodexInstallationGuide />
 
               <Card>
                 <CardHeader>
@@ -321,14 +297,26 @@ export function Tutorials() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className='space-y-3'>
-                  <CodeExample
-                    title={t('macOS / Linux')}
-                    value={unixInstaller}
-                  />
-                  <CodeExample
-                    title={t('Windows PowerShell')}
-                    value={windowsInstaller}
-                  />
+                  <Tabs defaultValue='unix'>
+                    <TabsList className='grid w-full grid-cols-2 group-data-horizontal/tabs:h-auto'>
+                      <TabsTrigger value='unix'>
+                        {t('macOS / Linux')}
+                      </TabsTrigger>
+                      <TabsTrigger value='windows'>{t('Windows')}</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value='unix' className='mt-3'>
+                      <CodeExample
+                        title={t('macOS / Linux')}
+                        value={unixInstaller}
+                      />
+                    </TabsContent>
+                    <TabsContent value='windows' className='mt-3'>
+                      <CodeExample
+                        title={t('Windows PowerShell')}
+                        value={windowsInstaller}
+                      />
+                    </TabsContent>
+                  </Tabs>
                   <Notice icon={ShieldCheck} title={t('What happens next')}>
                     {t(
                       'The script asks which mode to use and then requests your New API key. Key input is hidden. Choose option 1 unless you intentionally want to change the shared default Codex configuration.'

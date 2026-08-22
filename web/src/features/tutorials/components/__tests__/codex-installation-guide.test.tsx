@@ -17,29 +17,42 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { render, screen } from '@testing-library/react'
-import { TerminalSquare } from 'lucide-react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, test } from 'vitest'
 
-import { ClientPrerequisite } from '../client-prerequisite'
+import { CodexInstallationGuide } from '../codex-installation-guide'
 
-describe('client prerequisite', () => {
-  test('shows the requirement, verification command, and safe official link', () => {
-    render(
-      <ClientPrerequisite
-        title='Codex CLI'
-        status='Required'
-        description='Install Codex before setup.'
-        href='https://learn.chatgpt.com/docs/codex/cli'
-        linkLabel='Open installation guide'
-        icon={TerminalSquare}
-        command='codex --version'
-      />
-    )
+describe('Codex installation guide', () => {
+  test('shows the official macOS and Linux installer by default', () => {
+    render(<CodexInstallationGuide />)
 
-    expect(screen.getByText('Required')).toBeInTheDocument()
+    expect(
+      screen.getByText('curl -fsSL https://chatgpt.com/codex/install.sh | sh')
+    ).toBeInTheDocument()
     expect(screen.getByText('codex --version')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Do not delete the .codex folder/)
+    ).toBeInTheDocument()
+  })
+
+  test('switches to the official Windows installer', async () => {
+    const user = userEvent.setup()
+    render(<CodexInstallationGuide />)
+
+    await user.click(screen.getByRole('tab', { name: 'Windows' }))
+
+    expect(
+      screen.getByText(
+        'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"'
+      )
+    ).toBeInTheDocument()
+  })
+
+  test('links only to official OpenAI installation documentation', () => {
+    render(<CodexInstallationGuide />)
+
     const guideButton = screen.getByRole('button', {
-      name: 'Open installation guide',
+      name: 'Open the official Codex guide',
     })
 
     expect(guideButton).toHaveAttribute(
