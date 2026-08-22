@@ -168,7 +168,7 @@ export function Tutorials() {
       index: 3,
       title: t('Run the command for your system'),
       description: t(
-        'Copy the one-line command below into Terminal or PowerShell.'
+        'Use the copy button below. If you paste through remote desktop, verify that the URL remains plain text and was not converted into a Markdown link.'
       ),
       icon: TerminalSquare,
     },
@@ -176,7 +176,7 @@ export function Tutorials() {
       index: 4,
       title: t('Choose CLI-only mode'),
       description: t(
-        'Choose option 1 to keep the official desktop login and Remote Control unchanged.'
+        'Choose option 1 to keep Codex App, Cloud and Remote Control on the official login.'
       ),
       icon: ShieldCheck,
     },
@@ -319,7 +319,7 @@ export function Tutorials() {
                   </Tabs>
                   <Notice icon={ShieldCheck} title={t('What happens next')}>
                     {t(
-                      'The script asks which mode to use and then requests your New API key. Key input is hidden. Choose option 1 unless you intentionally want to change the shared default Codex configuration.'
+                      'The script asks which mode to use and then requests your New API key. Key input is hidden. Option 1 is recommended. Option 2 changes the shared default configuration and disables Codex App, Cloud and Remote Control until you restore the official default.'
                     )}
                   </Notice>
                 </CardContent>

@@ -16,7 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ExternalLink, Laptop, ShieldCheck, TerminalSquare } from 'lucide-react'
+import {
+  CheckCircle2,
+  ExternalLink,
+  Laptop,
+  MonitorCog,
+  ShieldCheck,
+  TerminalSquare,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
@@ -69,6 +76,81 @@ function InstallCommand(props: {
   )
 }
 
+function PlatformGuide(props: {
+  title: string
+  subtitle: string
+  requirement: string
+  installCommand: string
+  installDescription: string
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <div className='space-y-4'>
+      <div>
+        <h3 className='text-xl font-semibold tracking-tight'>{props.title}</h3>
+        <p className='text-muted-foreground mt-1 text-sm'>{props.subtitle}</p>
+      </div>
+
+      <div className='flex gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4'>
+        <CheckCircle2
+          className='mt-0.5 size-5 shrink-0 text-emerald-600'
+          aria-hidden='true'
+        />
+        <div>
+          <p className='text-sm font-semibold text-emerald-700 dark:text-emerald-400'>
+            {t('Official original installation')}
+          </p>
+          <p className='mt-1 text-xs leading-relaxed text-emerald-700/80 dark:text-emerald-300/80'>
+            {t(
+              'This guide uses only the official Codex installer and package.'
+            )}
+          </p>
+        </div>
+      </div>
+
+      <div className='rounded-xl border p-4'>
+        <div className='flex items-start gap-3'>
+          <div className='bg-muted flex size-8 shrink-0 items-center justify-center rounded-lg'>
+            <MonitorCog className='size-4' aria-hidden='true' />
+          </div>
+          <div>
+            <p className='text-sm font-semibold'>{t('System requirements')}</p>
+            <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
+              {props.requirement}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className='space-y-3 rounded-xl border p-4'>
+        <div className='flex items-center gap-3'>
+          <div className='bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-lg'>
+            <TerminalSquare className='size-4' aria-hidden='true' />
+          </div>
+          <p className='text-sm font-semibold'>{t('Installation steps')}</p>
+        </div>
+        <InstallCommand
+          label={t('1. Install with the official installer')}
+          command={props.installCommand}
+          description={props.installDescription}
+        />
+        <InstallCommand
+          label={t('Alternative: install with npm')}
+          command={NPM_INSTALL_COMMAND}
+          description={t(
+            'Use this only if Node.js and npm are already installed.'
+          )}
+        />
+        <InstallCommand
+          label={t('2. Reopen the terminal and verify the installation')}
+          command={VERIFY_COMMAND}
+        />
+      </div>
+    </div>
+  )
+}
+
 export function CodexInstallationGuide() {
   const { t } = useTranslation()
 
@@ -90,51 +172,53 @@ export function CodexInstallationGuide() {
         </div>
       </CardHeader>
       <CardContent className='space-y-4'>
-        <Tabs defaultValue='unix'>
-          <TabsList className='grid w-full grid-cols-2 group-data-horizontal/tabs:h-auto'>
-            <TabsTrigger value='unix'>{t('macOS / Linux')}</TabsTrigger>
-            <TabsTrigger value='windows'>{t('Windows')}</TabsTrigger>
-          </TabsList>
+        <Tabs
+          defaultValue='unix'
+          orientation='vertical'
+          className='grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]'
+        >
+          <div className='h-fit rounded-xl border p-2'>
+            <p className='text-muted-foreground px-2 pb-2 text-xs font-semibold tracking-wide'>
+              {t('Installation & tutorials')}
+            </p>
+            <div className='px-2 py-1 text-sm font-semibold'>
+              {t('Codex installation')}
+            </div>
+            <TabsList variant='line' className='mt-1 w-full items-stretch pl-4'>
+              <TabsTrigger value='unix' className='min-h-9 px-3'>
+                {t('macOS / Linux')}
+              </TabsTrigger>
+              <TabsTrigger value='windows' className='min-h-9 px-3'>
+                {t('Windows')}
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-          <TabsContent value='unix' className='mt-4 space-y-3'>
-            <InstallCommand
-              label={t('1. Install with the official installer')}
-              command={UNIX_INSTALL_COMMAND}
-              description={t(
+          <TabsContent value='unix'>
+            <PlatformGuide
+              title={t('macOS / Linux Codex installation guide')}
+              subtitle={t('Install the official Codex CLI on macOS or Linux.')}
+              requirement={t(
+                'A supported macOS or Linux system, a terminal, and internet access.'
+              )}
+              installCommand={UNIX_INSTALL_COMMAND}
+              installDescription={t(
                 'Recommended. This installer does not require you to install Node.js first.'
               )}
             />
-            <InstallCommand
-              label={t('Alternative: install with npm')}
-              command={NPM_INSTALL_COMMAND}
-              description={t(
-                'Use this only if Node.js and npm are already installed.'
-              )}
-            />
-            <InstallCommand
-              label={t('2. Verify the installation')}
-              command={VERIFY_COMMAND}
-            />
           </TabsContent>
 
-          <TabsContent value='windows' className='mt-4 space-y-3'>
-            <InstallCommand
-              label={t('1. Install with the official installer')}
-              command={WINDOWS_INSTALL_COMMAND}
-              description={t(
+          <TabsContent value='windows'>
+            <PlatformGuide
+              title={t('Windows Codex installation guide')}
+              subtitle={t('Install the official Codex CLI on Windows.')}
+              requirement={t(
+                'Windows with PowerShell and internet access. Use a local PowerShell window when possible.'
+              )}
+              installCommand={WINDOWS_INSTALL_COMMAND}
+              installDescription={t(
                 'Recommended. Run this command in PowerShell and reopen PowerShell after it finishes.'
               )}
-            />
-            <InstallCommand
-              label={t('Alternative: install with npm')}
-              command={NPM_INSTALL_COMMAND}
-              description={t(
-                'Use this only if Node.js and npm are already installed.'
-              )}
-            />
-            <InstallCommand
-              label={t('2. Verify the installation')}
-              command={VERIFY_COMMAND}
             />
           </TabsContent>
         </Tabs>

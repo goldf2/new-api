@@ -64,32 +64,32 @@ describe('tutorial configuration examples', () => {
     )
     const windowsCommand = buildWindowsInstallerCommand(origin, baseUrl)
 
-    expect(windowsCommand).toContain(
-      "$scriptUrl = 'https' + '://gateway.example/scripts/setup-codex-newapi.ps1'"
+    expect(windowsCommand).toBe(
+      '$script = Invoke-RestMethod -Uri "https://gateway.example/scripts/setup-codex-newapi.ps1"; & ([ScriptBlock]::Create($script)) -BaseUrl "https://gateway.example/v1"'
     )
-    expect(windowsCommand).toContain(
-      "$baseUrl = 'https' + '://gateway.example/v1'"
-    )
-    expect(windowsCommand).toContain(
-      "$scriptPath = Join-Path $env:TEMP 'setup-codex-newapi.ps1'"
-    )
-    expect(windowsCommand).toContain(
-      'curl.exe --ipv4 --fail --location --retry 3 --http1.1 --ssl-no-revoke'
-    )
-    expect(windowsCommand).toContain(
-      'if ($LASTEXITCODE -ne 0) { Remove-Item -LiteralPath $scriptPath -Force -ErrorAction SilentlyContinue; Start-BitsTransfer -Source $scriptUrl -Destination $scriptPath }'
-    )
-    expect(windowsCommand).toContain(
-      '& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath'
-    )
-    expect(windowsCommand).not.toContain('https://gateway.example')
-    expect(windowsCommand).not.toContain('Invoke-RestMethod')
-    expect(windowsCommand).not.toContain('ScriptBlock')
   })
 
-  test('serves the Windows installer with a UTF-8 byte-order mark', () => {
+  test('serves the Windows installer without a UTF-8 byte-order mark', () => {
     const script = readFileSync('public/scripts/setup-codex-newapi.ps1')
 
-    expect(script.subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]))
+    expect(script.subarray(0, 3)).toEqual(Buffer.from('[Cm'))
+  })
+
+  test('keeps official-login Codex subcommands outside the isolated CLI config', () => {
+    const windowsScript = readFileSync(
+      'public/scripts/setup-codex-newapi.ps1',
+      'utf8'
+    )
+    const unixScript = readFileSync(
+      'public/scripts/setup-codex-newapi.sh',
+      'utf8'
+    )
+
+    for (const subcommand of ['app', 'remote-control', 'cloud']) {
+      expect(windowsScript).toContain(`"%~1"=="${subcommand}"`)
+    }
+    expect(unixScript).toContain('app|remote-control|cloud)')
+    expect(windowsScript).toContain('请输入 GLOBAL 继续')
+    expect(unixScript).toContain('请输入 GLOBAL 继续')
   })
 })

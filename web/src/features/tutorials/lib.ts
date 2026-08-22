@@ -26,17 +26,6 @@ export function getSiteOrigin(origin: string): string {
   return origin.replace(/\/+$/, '')
 }
 
-function buildPowerShellUrl(value: string): string {
-  const separatorIndex = value.indexOf('://')
-  const quote = (segment: string) => `'${segment.replaceAll("'", "''")}'`
-
-  if (separatorIndex === -1) {
-    return quote(value)
-  }
-
-  return `${quote(value.slice(0, separatorIndex))} + ${quote(value.slice(separatorIndex))}`
-}
-
 export function buildUnixInstallerCommand(
   origin: string,
   baseUrl: string
@@ -50,12 +39,8 @@ export function buildWindowsInstallerCommand(
   baseUrl: string
 ): string {
   const siteOrigin = getSiteOrigin(origin)
-  const scriptUrl = buildPowerShellUrl(
-    `${siteOrigin}/scripts/setup-codex-newapi.ps1`
-  )
-  const apiBaseUrl = buildPowerShellUrl(baseUrl)
 
-  return `$scriptUrl = ${scriptUrl}; $baseUrl = ${apiBaseUrl}; $scriptPath = Join-Path $env:TEMP 'setup-codex-newapi.ps1'; Remove-Item -LiteralPath $scriptPath -Force -ErrorAction SilentlyContinue; curl.exe --ipv4 --fail --location --retry 3 --http1.1 --ssl-no-revoke $scriptUrl --output $scriptPath; if ($LASTEXITCODE -ne 0) { Remove-Item -LiteralPath $scriptPath -Force -ErrorAction SilentlyContinue; Start-BitsTransfer -Source $scriptUrl -Destination $scriptPath }; if (!(Test-Path -LiteralPath $scriptPath) -or (Get-Item -LiteralPath $scriptPath).Length -eq 0) { throw '脚本下载失败，请检查网络后重试。' }; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath -BaseUrl $baseUrl`
+  return `$script = Invoke-RestMethod -Uri "${siteOrigin}/scripts/setup-codex-newapi.ps1"; & ([ScriptBlock]::Create($script)) -BaseUrl "${baseUrl}"`
 }
 
 export function buildResponsesCurl(baseUrl: string): string {

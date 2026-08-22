@@ -68,9 +68,9 @@ Options:
 
 Run without arguments to open the interactive menu.
 
-"install" only redirects the terminal Codex CLI. "global" changes the default
-~/.codex configuration used by Codex clients, but it does not replace a
-ChatGPT account or ChatGPT login.
+"install" redirects ordinary terminal Codex CLI sessions only. Codex App,
+Cloud and Remote Control continue using the official configuration. "global"
+changes ~/.codex and disables those official-login features until restored.
 EOF
 }
 
@@ -514,9 +514,16 @@ write_shell_wrapper() {
 
 $MANAGED_BEGIN
 # Terminal Codex defaults to the isolated New API provider.
-# The ChatGPT desktop app continues using ~/.codex and its official login.
+# Official-login subcommands continue using ~/.codex.
 codex() {
-  CODEX_HOME=$quoted_home $quoted_bin "\$@"
+  case "\${1:-}" in
+    app|remote-control|cloud)
+      $quoted_bin "\$@"
+      ;;
+    *)
+      CODEX_HOME=$quoted_home $quoted_bin "\$@"
+      ;;
+  esac
 }
 $MANAGED_END
 EOF
@@ -527,7 +534,7 @@ print_cli_summary() {
   cat <<'EOF'
 
 方式 1 已启用：终端 Codex CLI 将使用 New API。
-ChatGPT 桌面端登录保持不变。
+Codex App、ChatGPT 登录、Cloud 和 Remote Control 保持官方入口。
 
 重新打开终端，然后输入：
   codex
@@ -538,9 +545,8 @@ print_global_summary() {
   cat <<'EOF'
 
 方式 2 已启用：默认 Codex 配置将使用 New API。
-请完全退出并重新打开受影响的 Codex 客户端。
-
-注意：New API 不会变成 ChatGPT 账号，也不会替代 ChatGPT 登录。
+Codex App、ChatGPT 登录、Cloud 和 Remote Control 将无法使用该默认配置。
+如需恢复，请重新运行脚本并选择“恢复官方默认”。
 EOF
 }
 
@@ -642,6 +648,15 @@ confirm() {
   esac
 }
 
+confirm_global_mode() {
+  local answer=""
+  printf '\n警告：方式 2 会修改默认 ~/.codex/config.toml。\n'
+  printf 'Codex App、ChatGPT 登录、Cloud 和 Remote Control 将无法使用，直到恢复官方默认。\n'
+  printf '如已理解，请输入 GLOBAL 继续：'
+  IFS= read -r answer <&3
+  [ "$answer" = "GLOBAL" ]
+}
+
 pause_menu() {
   printf '\n按回车返回菜单...'
   IFS= read -r _pause <&3
@@ -656,10 +671,10 @@ interactive_menu() {
 Codex New API 管理
 
   1. 仅接管终端 Codex CLI（推荐）
-     ChatGPT 桌面端登录和 Remote Control 保持不变
+     Codex App、ChatGPT 登录、Cloud 和 Remote Control 保持不变
 
-  2. 接管默认 Codex 配置
-     可影响共用 ~/.codex 的客户端，但不会替代 ChatGPT 账号
+  2. 高级：接管默认 Codex 配置
+     会停用依赖官方登录的 Codex App、Cloud 和 Remote Control
 
   3. 更换 New API 密钥
   4. 查看当前状态
@@ -676,9 +691,7 @@ EOF
         pause_menu
         ;;
       2)
-        printf '\n方式 2 会修改默认 Codex 配置，并可能影响桌面 Codex。\n'
-        printf 'ChatGPT 账号、云端功能和 Remote Control 不能由 New API 替代。\n'
-        if confirm "继续使用方式 2？"; then
+        if confirm_global_mode; then
           install_global_mode
         else
           printf '\n已取消。\n'
@@ -750,8 +763,7 @@ case "$ACTION" in
     install_cli_mode
     ;;
   global)
-    printf '\n方式 2 会修改默认 Codex 配置，但不会替代 ChatGPT 账号。\n'
-    if confirm "继续使用方式 2？"; then
+    if confirm_global_mode; then
       install_global_mode
     else
       printf '\n已取消。\n'

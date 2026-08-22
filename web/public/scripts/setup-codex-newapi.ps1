@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [Parameter(Position = 0)]
     [ValidateSet('Menu', 'InstallCli', 'InstallGlobal', 'RotateKey', 'Status', 'Restore')]
@@ -237,7 +237,13 @@ function Install-CliWrapper {
     Ensure-Directory $Script:HelperDir
     $wrapper = @"
 @echo off
+if /I "%~1"=="app" goto official
+if /I "%~1"=="remote-control" goto official
+if /I "%~1"=="cloud" goto official
 set "CODEX_HOME=$Script:TargetHome"
+call "$codexPath" %*
+exit /b %ERRORLEVEL%
+:official
 call "$codexPath" %*
 "@
     Write-SystemEncodedText -Path $Script:CliWrapper -Content $wrapper
@@ -399,7 +405,7 @@ function Install-CliMode {
 
     Write-Host ''
     Write-Host '方式 1 已启用：终端 Codex CLI 将使用 New API。'
-    Write-Host 'ChatGPT 桌面端登录保持不变。'
+    Write-Host 'Codex App、ChatGPT 登录、Cloud 和 Remote Control 保持官方入口。'
     Write-Host ''
     Write-Host '重新打开终端，然后输入：codex'
 }
@@ -412,8 +418,8 @@ function Install-GlobalMode {
 
     Write-Host ''
     Write-Host '方式 2 已启用：默认 Codex 配置将使用 New API。'
-    Write-Host '请完全退出并重新打开受影响的 Codex 客户端。'
-    Write-Host 'New API 不会替代 ChatGPT 账号或 ChatGPT 登录。'
+    Write-Host 'Codex App、ChatGPT 登录、Cloud 和 Remote Control 将无法使用该默认配置。'
+    Write-Host '如需恢复，请重新运行脚本并选择“恢复官方默认”。'
 }
 
 function Rotate-Credential {
@@ -466,6 +472,14 @@ function Confirm-Action {
     $answer -match '^(y|yes)$'
 }
 
+function Confirm-GlobalMode {
+    Write-Host ''
+    Write-Host '警告：方式 2 会修改默认 ~/.codex/config.toml。'
+    Write-Host 'Codex App、ChatGPT 登录、Cloud 和 Remote Control 将无法使用，直到恢复官方默认。'
+    $answer = Read-Host '如已理解，请输入 GLOBAL 继续'
+    $answer -ceq 'GLOBAL'
+}
+
 function Pause-Menu {
     [void](Read-Host "`n按回车返回菜单")
 }
@@ -476,10 +490,10 @@ function Show-InteractiveMenu {
         Write-Host 'Codex New API 管理'
         Write-Host ''
         Write-Host '  1. 仅接管终端 Codex CLI（推荐）'
-        Write-Host '     ChatGPT 桌面端登录和 Remote Control 保持不变'
+        Write-Host '     Codex App、ChatGPT 登录、Cloud 和 Remote Control 保持不变'
         Write-Host ''
-        Write-Host '  2. 接管默认 Codex 配置'
-        Write-Host '     可影响共用 ~/.codex 的客户端，但不会替代 ChatGPT 账号'
+        Write-Host '  2. 高级：接管默认 Codex 配置'
+        Write-Host '     会停用依赖官方登录的 Codex App、Cloud 和 Remote Control'
         Write-Host ''
         Write-Host '  3. 更换 New API 密钥'
         Write-Host '  4. 查看当前状态'
@@ -494,10 +508,7 @@ function Show-InteractiveMenu {
                 Pause-Menu
             }
             '2' {
-                Write-Host ''
-                Write-Host '方式 2 会修改默认 Codex 配置，并可能影响桌面 Codex。'
-                Write-Host 'ChatGPT 账号、云端功能和 Remote Control 不能由 New API 替代。'
-                if (Confirm-Action '继续使用方式 2？') {
+                if (Confirm-GlobalMode) {
                     Install-GlobalMode
                 }
                 else {
@@ -550,9 +561,7 @@ try {
         'Menu' { Show-InteractiveMenu }
         'InstallCli' { Install-CliMode }
         'InstallGlobal' {
-            Write-Host ''
-            Write-Host '方式 2 会修改默认 Codex 配置，但不会替代 ChatGPT 账号。'
-            if (Confirm-Action '继续使用方式 2？') {
+            if (Confirm-GlobalMode) {
                 Install-GlobalMode
             }
             else {
