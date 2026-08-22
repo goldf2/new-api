@@ -214,11 +214,11 @@ export function Tutorials() {
                     </div>
                     <div>
                       <CardTitle className='text-lg sm:text-xl'>
-                        {t('Start using Codex with one command')}
+                        {t('Choose an AI coding client')}
                       </CardTitle>
                       <CardDescription className='mt-1 max-w-3xl leading-relaxed'>
                         {t(
-                          'This guide is for regular users. You only need your personal API key and the command for your operating system.'
+                          'Codex is ready to use. Claude Code and Gemini CLI guides are coming soon.'
                         )}
                       </CardDescription>
                     </div>

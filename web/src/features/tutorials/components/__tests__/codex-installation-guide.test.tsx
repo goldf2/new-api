@@ -46,7 +46,7 @@ describe('Codex installation guide', () => {
     const user = userEvent.setup()
     render(<CodexInstallationGuide {...guideProps} />)
 
-    await user.click(screen.getByRole('tab', { name: 'Windows' }))
+    await user.click(screen.getByRole('tab', { name: 'Codex Windows' }))
 
     expect(
       screen.getByText(
@@ -55,6 +55,29 @@ describe('Codex installation guide', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('WINDOWS_SETUP_COMMAND')).toBeInTheDocument()
     expect(screen.queryByText('UNIX_SETUP_COMMAND')).not.toBeInTheDocument()
+  })
+
+  test('shows platform-specific placeholder pages without Codex content', async () => {
+    const user = userEvent.setup()
+    render(<CodexInstallationGuide {...guideProps} />)
+
+    const claudeTab = screen.getByRole('tab', {
+      name: 'Claude Code macOS / Linux',
+    })
+    await user.click(claudeTab)
+
+    expect(screen.getByText('Tutorial coming soon')).toBeInTheDocument()
+    expect(claudeTab).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByText('UNIX_SETUP_COMMAND')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Open the official Codex guide')
+    ).not.toBeInTheDocument()
+
+    const geminiTab = screen.getByRole('tab', { name: 'Gemini CLI Windows' })
+    await user.click(geminiTab)
+
+    expect(geminiTab).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByText('WINDOWS_SETUP_COMMAND')).not.toBeInTheDocument()
   })
 
   test('links only to official OpenAI installation documentation', () => {

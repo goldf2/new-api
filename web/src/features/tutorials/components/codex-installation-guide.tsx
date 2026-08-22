@@ -17,12 +17,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import {
+  Bot,
   CheckCircle2,
+  Clock3,
   ExternalLink,
   KeyRound,
   Laptop,
   MonitorCog,
   ShieldCheck,
+  Sparkles,
   TerminalSquare,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -205,6 +208,88 @@ function PlatformGuide(props: {
   )
 }
 
+function ComingSoonGuide(props: { product: string; platform: string }) {
+  const { t } = useTranslation()
+
+  return (
+    <div className='flex min-h-80 items-center justify-center rounded-xl border border-dashed p-6 text-center'>
+      <div className='max-w-md'>
+        <div className='bg-muted mx-auto flex size-12 items-center justify-center rounded-2xl'>
+          <Clock3 className='text-muted-foreground size-5' aria-hidden='true' />
+        </div>
+        <p className='mt-4 text-xs font-semibold tracking-wide text-amber-600 uppercase dark:text-amber-400'>
+          {t('Coming soon')}
+        </p>
+        <h3 className='mt-2 text-xl font-semibold'>
+          {t('Tutorial coming soon')}
+        </h3>
+        <p className='text-muted-foreground mt-2 text-sm leading-relaxed'>
+          {t(
+            'The {{product}} guide for {{platform}} is being prepared. You can see the page now, and the installation steps will be added later.',
+            props
+          )}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function CodexGuideFooter() {
+  const { t } = useTranslation()
+
+  return (
+    <>
+      <div className='bg-primary/5 mt-4 flex gap-3 rounded-xl border p-3'>
+        <ShieldCheck
+          className='text-primary mt-0.5 size-4 shrink-0'
+          aria-hidden='true'
+        />
+        <div>
+          <p className='text-sm font-medium'>
+            {t('Keep your existing Codex login')}
+          </p>
+          <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
+            {t(
+              'Do not delete the .codex folder or replace auth.json. The next setup step can use an isolated CLI configuration and keep the official desktop login and Remote Control unchanged.'
+            )}
+          </p>
+        </div>
+      </div>
+
+      <div className='mt-4 flex flex-wrap gap-2'>
+        <Button
+          variant='outline'
+          size='sm'
+          render={
+            <a
+              href='https://learn.chatgpt.com/docs/codex/cli'
+              target='_blank'
+              rel='noopener noreferrer'
+            />
+          }
+        >
+          <ExternalLink data-icon='inline-start' />
+          {t('Open the official Codex guide')}
+        </Button>
+        <Button
+          variant='ghost'
+          size='sm'
+          render={
+            <a
+              href='https://learn.chatgpt.com/docs/app'
+              target='_blank'
+              rel='noopener noreferrer'
+            />
+          }
+        >
+          <Laptop data-icon='inline-start' />
+          {t('ChatGPT desktop is optional')}
+        </Button>
+      </div>
+    </>
+  )
+}
+
 export function CodexInstallationGuide(props: {
   unixSetupCommand: string
   windowsSetupCommand: string
@@ -219,10 +304,10 @@ export function CodexInstallationGuide(props: {
             <TerminalSquare className='size-4' aria-hidden='true' />
           </div>
           <div>
-            <CardTitle>{t('Install Codex CLI')}</CardTitle>
+            <CardTitle>{t('CLI installation guides')}</CardTitle>
             <CardDescription className='mt-1'>
               {t(
-                'Install the official Codex CLI first, then return here to connect it to New API.'
+                'Choose a client and operating system. Only the selected guide is shown.'
               )}
             </CardDescription>
           </div>
@@ -230,28 +315,98 @@ export function CodexInstallationGuide(props: {
       </CardHeader>
       <CardContent className='space-y-4'>
         <Tabs
-          defaultValue='unix'
+          defaultValue='codex-unix'
           orientation='vertical'
-          className='grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]'
+          className='grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]'
         >
           <div className='h-fit rounded-xl border p-2'>
             <p className='text-muted-foreground px-2 pb-2 text-xs font-semibold tracking-wide'>
               {t('Installation & tutorials')}
             </p>
-            <div className='px-2 py-1 text-sm font-semibold'>
-              {t('Codex installation')}
-            </div>
-            <TabsList variant='line' className='mt-1 w-full items-stretch pl-4'>
-              <TabsTrigger value='unix' className='min-h-9 px-3'>
+            <TabsList variant='line' className='w-full items-stretch'>
+              <div
+                role='presentation'
+                className='flex items-center gap-2 px-2 py-1 text-sm font-semibold'
+              >
+                <Bot className='size-4' aria-hidden='true' />
+                <span>{t('Claude Code installation')}</span>
+                <span className='ml-auto text-[10px] font-medium text-amber-600 dark:text-amber-400'>
+                  {t('Coming soon')}
+                </span>
+              </div>
+              <TabsTrigger
+                value='claude-unix'
+                aria-label='Claude Code macOS / Linux'
+                className='min-h-9 pl-8'
+              >
                 {t('macOS / Linux')}
               </TabsTrigger>
-              <TabsTrigger value='windows' className='min-h-9 px-3'>
+              <TabsTrigger
+                value='claude-windows'
+                aria-label='Claude Code Windows'
+                className='min-h-9 pl-8'
+              >
+                {t('Windows')}
+              </TabsTrigger>
+
+              <div
+                role='presentation'
+                className='mt-2 flex items-center gap-2 px-2 py-1 text-sm font-semibold'
+              >
+                <TerminalSquare className='size-4' aria-hidden='true' />
+                <span>{t('Codex installation')}</span>
+              </div>
+              <TabsTrigger
+                value='codex-unix'
+                aria-label='Codex macOS / Linux'
+                className='min-h-9 pl-8'
+              >
+                {t('macOS / Linux')}
+              </TabsTrigger>
+              <TabsTrigger
+                value='codex-windows'
+                aria-label='Codex Windows'
+                className='min-h-9 pl-8'
+              >
+                {t('Windows')}
+              </TabsTrigger>
+
+              <div
+                role='presentation'
+                className='mt-2 flex items-center gap-2 px-2 py-1 text-sm font-semibold'
+              >
+                <Sparkles className='size-4' aria-hidden='true' />
+                <span>{t('Gemini CLI installation')}</span>
+                <span className='ml-auto text-[10px] font-medium text-amber-600 dark:text-amber-400'>
+                  {t('Coming soon')}
+                </span>
+              </div>
+              <TabsTrigger
+                value='gemini-unix'
+                aria-label='Gemini CLI macOS / Linux'
+                className='min-h-9 pl-8'
+              >
+                {t('macOS / Linux')}
+              </TabsTrigger>
+              <TabsTrigger
+                value='gemini-windows'
+                aria-label='Gemini CLI Windows'
+                className='min-h-9 pl-8'
+              >
                 {t('Windows')}
               </TabsTrigger>
             </TabsList>
           </div>
 
-          <TabsContent value='unix'>
+          <TabsContent value='claude-unix'>
+            <ComingSoonGuide product='Claude Code' platform='macOS / Linux' />
+          </TabsContent>
+
+          <TabsContent value='claude-windows'>
+            <ComingSoonGuide product='Claude Code' platform='Windows' />
+          </TabsContent>
+
+          <TabsContent value='codex-unix'>
             <PlatformGuide
               title={t('macOS / Linux Codex installation guide')}
               subtitle={t('Install the official Codex CLI on macOS or Linux.')}
@@ -267,9 +422,10 @@ export function CodexInstallationGuide(props: {
                 'Use the copy button, paste the command into Terminal, and run it.'
               )}
             />
+            <CodexGuideFooter />
           </TabsContent>
 
-          <TabsContent value='windows'>
+          <TabsContent value='codex-windows'>
             <PlatformGuide
               title={t('Windows Codex installation guide')}
               subtitle={t('Install the official Codex CLI on Windows.')}
@@ -285,56 +441,17 @@ export function CodexInstallationGuide(props: {
                 'Use the copy button. If you paste through remote desktop, verify that the URL remains plain text and was not converted into a Markdown link.'
               )}
             />
+            <CodexGuideFooter />
+          </TabsContent>
+
+          <TabsContent value='gemini-unix'>
+            <ComingSoonGuide product='Gemini CLI' platform='macOS / Linux' />
+          </TabsContent>
+
+          <TabsContent value='gemini-windows'>
+            <ComingSoonGuide product='Gemini CLI' platform='Windows' />
           </TabsContent>
         </Tabs>
-
-        <div className='bg-primary/5 flex gap-3 rounded-xl border p-3'>
-          <ShieldCheck
-            className='text-primary mt-0.5 size-4 shrink-0'
-            aria-hidden='true'
-          />
-          <div>
-            <p className='text-sm font-medium'>
-              {t('Keep your existing Codex login')}
-            </p>
-            <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
-              {t(
-                'Do not delete the .codex folder or replace auth.json. The next setup step can use an isolated CLI configuration and keep the official desktop login and Remote Control unchanged.'
-              )}
-            </p>
-          </div>
-        </div>
-
-        <div className='flex flex-wrap gap-2'>
-          <Button
-            variant='outline'
-            size='sm'
-            render={
-              <a
-                href='https://learn.chatgpt.com/docs/codex/cli'
-                target='_blank'
-                rel='noopener noreferrer'
-              />
-            }
-          >
-            <ExternalLink data-icon='inline-start' />
-            {t('Open the official Codex guide')}
-          </Button>
-          <Button
-            variant='ghost'
-            size='sm'
-            render={
-              <a
-                href='https://learn.chatgpt.com/docs/app'
-                target='_blank'
-                rel='noopener noreferrer'
-              />
-            }
-          >
-            <Laptop data-icon='inline-start' />
-            {t('ChatGPT desktop is optional')}
-          </Button>
-        </div>
       </CardContent>
     </Card>
   )
