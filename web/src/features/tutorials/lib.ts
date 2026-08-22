@@ -55,7 +55,7 @@ export function buildWindowsInstallerCommand(
   )
   const apiBaseUrl = buildPowerShellUrl(baseUrl)
 
-  return `$scriptUrl = ${scriptUrl}; $baseUrl = ${apiBaseUrl}; $scriptPath = Join-Path $env:TEMP 'setup-codex-newapi.ps1'; Remove-Item -LiteralPath $scriptPath -Force -ErrorAction SilentlyContinue; curl.exe --fail --location --retry 3 --http1.1 --ssl-no-revoke $scriptUrl --output $scriptPath; if ($LASTEXITCODE -ne 0) { Start-BitsTransfer -Source $scriptUrl -Destination $scriptPath }; if (!(Test-Path -LiteralPath $scriptPath) -or (Get-Item -LiteralPath $scriptPath).Length -eq 0) { throw '脚本下载失败，请检查网络后重试。' }; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath -BaseUrl $baseUrl`
+  return `$scriptUrl = ${scriptUrl}; $baseUrl = ${apiBaseUrl}; $scriptPath = Join-Path $env:TEMP 'setup-codex-newapi.ps1'; Remove-Item -LiteralPath $scriptPath -Force -ErrorAction SilentlyContinue; curl.exe --fail --location --retry 3 --http1.1 --ssl-no-revoke $scriptUrl --output $scriptPath; if ($LASTEXITCODE -ne 0) { Remove-Item -LiteralPath $scriptPath -Force -ErrorAction SilentlyContinue; Start-BitsTransfer -Source $scriptUrl -Destination $scriptPath }; if (!(Test-Path -LiteralPath $scriptPath) -or (Get-Item -LiteralPath $scriptPath).Length -eq 0) { throw '脚本下载失败，请检查网络后重试。' }; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath -BaseUrl $baseUrl`
 }
 
 export function buildResponsesCurl(baseUrl: string): string {

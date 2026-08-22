@@ -77,7 +77,7 @@ describe('tutorial configuration examples', () => {
       'curl.exe --fail --location --retry 3 --http1.1 --ssl-no-revoke'
     )
     expect(windowsCommand).toContain(
-      'Start-BitsTransfer -Source $scriptUrl -Destination $scriptPath'
+      'if ($LASTEXITCODE -ne 0) { Remove-Item -LiteralPath $scriptPath -Force -ErrorAction SilentlyContinue; Start-BitsTransfer -Source $scriptUrl -Destination $scriptPath }'
     )
     expect(windowsCommand).toContain(
       '& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath'
