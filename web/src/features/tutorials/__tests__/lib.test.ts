@@ -71,6 +71,12 @@ describe('tutorial configuration examples', () => {
     expect(buildWindowsInstallerCommand(origin, baseUrl)).toContain(
       '.TrimStart([char]0xFEFF)'
     )
+    expect(buildWindowsInstallerCommand(origin, baseUrl)).toContain(
+      '[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12'
+    )
+    expect(buildWindowsInstallerCommand(origin, baseUrl)).toContain(
+      'Invoke-RestMethod -Uri "https://gateway.example/scripts/setup-codex-newapi.ps1"'
+    )
   })
 
   test('serves the Windows installer without a UTF-8 byte-order mark', () => {

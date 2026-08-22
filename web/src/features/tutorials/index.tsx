@@ -44,6 +44,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useIsAdmin } from '@/hooks/use-admin'
 
+import { ClientPrerequisite } from './components/client-prerequisite'
 import {
   buildCodexConfig,
   buildResponsesCurl,
@@ -258,6 +259,40 @@ export function Tutorials() {
                     </div>
                   </div>
                 </CardHeader>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t('Install the client first')}</CardTitle>
+                  <CardDescription>
+                    {t(
+                      'Codex CLI is required for one-click setup. ChatGPT desktop is optional.'
+                    )}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className='grid gap-3 md:grid-cols-2'>
+                  <ClientPrerequisite
+                    title={t('Codex CLI')}
+                    status={t('Required')}
+                    description={t(
+                      'Install Codex from the official guide, then run codex --version to confirm it is available.'
+                    )}
+                    href='https://learn.chatgpt.com/docs/codex/cli'
+                    linkLabel={t('Open Codex installation guide')}
+                    icon={TerminalSquare}
+                    command='codex --version'
+                  />
+                  <ClientPrerequisite
+                    title={t('ChatGPT desktop')}
+                    status={t('Optional')}
+                    description={t(
+                      'Install the official desktop app only if you need it. It still uses your ChatGPT account and is not required for New API CLI access.'
+                    )}
+                    href='https://learn.chatgpt.com/docs/app'
+                    linkLabel={t('Open ChatGPT download page')}
+                    icon={Laptop}
+                  />
+                </CardContent>
               </Card>
 
               <Card>
