@@ -62,27 +62,29 @@ describe('tutorial configuration examples', () => {
     expect(buildUnixInstallerCommand(origin, baseUrl)).toBe(
       'curl -fsSL "https://gateway.example/scripts/setup-codex-newapi.sh" | bash -s -- --base-url "https://gateway.example/v1"'
     )
-    expect(buildWindowsInstallerCommand(origin, baseUrl)).toContain(
-      'https://gateway.example/scripts/setup-codex-newapi.ps1'
+    const windowsCommand = buildWindowsInstallerCommand(origin, baseUrl)
+
+    expect(windowsCommand).toContain(
+      "$scriptUrl = 'https' + '://gateway.example/scripts/setup-codex-newapi.ps1'"
     )
-    expect(buildWindowsInstallerCommand(origin, baseUrl)).toContain(
-      "-BaseUrl 'https://gateway.example/v1'"
+    expect(windowsCommand).toContain(
+      "$baseUrl = 'https' + '://gateway.example/v1'"
     )
-    expect(buildWindowsInstallerCommand(origin, baseUrl)).toContain(
+    expect(windowsCommand).toContain(
       "$scriptPath = Join-Path $env:TEMP 'setup-codex-newapi.ps1'"
     )
-    expect(buildWindowsInstallerCommand(origin, baseUrl)).toContain(
-      'curl.exe --fail --location --retry 3 --tlsv1.2'
+    expect(windowsCommand).toContain(
+      'curl.exe --fail --location --retry 3 --http1.1 --ssl-no-revoke'
     )
-    expect(buildWindowsInstallerCommand(origin, baseUrl)).toContain(
+    expect(windowsCommand).toContain(
+      'Start-BitsTransfer -Source $scriptUrl -Destination $scriptPath'
+    )
+    expect(windowsCommand).toContain(
       '& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath'
     )
-    expect(buildWindowsInstallerCommand(origin, baseUrl)).not.toContain(
-      'Invoke-RestMethod'
-    )
-    expect(buildWindowsInstallerCommand(origin, baseUrl)).not.toContain(
-      'ScriptBlock'
-    )
+    expect(windowsCommand).not.toContain('https://gateway.example')
+    expect(windowsCommand).not.toContain('Invoke-RestMethod')
+    expect(windowsCommand).not.toContain('ScriptBlock')
   })
 
   test('serves the Windows installer without a UTF-8 byte-order mark', () => {
