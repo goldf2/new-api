@@ -154,6 +154,11 @@ func UpdateOption(c *gin.Context) {
 		}
 	}
 	switch option.Key {
+	case "SMSVerificationEnabled":
+		if option.Value == "true" && !common.AliyunSMSReady() {
+			common.ApiErrorI18n(c, i18n.MsgSMSNotConfigured)
+			return
+		}
 	case "GitHubOAuthEnabled":
 		if option.Value == "true" && common.GitHubClientId == "" {
 			c.JSON(http.StatusOK, gin.H{

@@ -288,6 +288,32 @@ func TestInsertKeepsBlankPasswordForPasswordlessUser(t *testing.T) {
 	assert.Empty(t, stored.Password)
 }
 
+func TestInsertNormalizesAndRejectsDuplicatePhone(t *testing.T) {
+	setupUserUpdateTestState(t)
+
+	firstPhone := "+86 138-0013-8000"
+	first := &User{
+		Username: "phone-user-1",
+		Password: "password123",
+		Phone:    &firstPhone,
+		Role:     common.RoleCommonUser,
+		Status:   common.UserStatusEnabled,
+	}
+	require.NoError(t, first.Insert(0))
+	require.NotNil(t, first.Phone)
+	assert.Equal(t, "13800138000", *first.Phone)
+
+	duplicatePhone := "13800138000"
+	second := &User{
+		Username: "phone-user-2",
+		Password: "password123",
+		Phone:    &duplicatePhone,
+		Role:     common.RoleCommonUser,
+		Status:   common.UserStatusEnabled,
+	}
+	require.ErrorIs(t, second.Insert(0), ErrPhoneAlreadyTaken)
+}
+
 func TestUpdateUserBindColumnOnlyTouchesTheBindingColumn(t *testing.T) {
 	truncateTables(t)
 

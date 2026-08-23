@@ -115,6 +115,27 @@ func TestRedisEmailVerificationRateLimiterPreservesResponseAndTTL(t *testing.T) 
 	assert.Equal(t, time.Duration(EmailVerificationDuration)*time.Second, redisServer.TTL(key))
 }
 
+func TestSMSVerificationRateLimiterLimitsPhoneAcrossIPs(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	redisServer, _ := useRateLimitMiniRedis(t)
+
+	router := gin.New()
+	require.NoError(t, router.SetTrustedProxies(nil))
+	router.GET("/verify-sms", SMSVerificationRateLimit(), func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+
+	path := "/verify-sms?phone=13800138000"
+	assert.Equal(t, http.StatusNoContent, performRateLimitRequest(router, path, "192.0.2.31:12345").Code)
+	response := performRateLimitRequest(router, path, "198.51.100.31:12345")
+	assert.Equal(t, http.StatusTooManyRequests, response.Code)
+	assert.Equal(t, "60", response.Header().Get("Retry-After"))
+	assert.Contains(t, response.Body.String(), "短信发送过于频繁")
+
+	key := smsVerificationRateLimitKey("SV-MINUTE", "13800138000")
+	assert.True(t, redisServer.Exists(key))
+}
+
 func TestRedisFixedWindowIsAtomicUnderConcurrency(t *testing.T) {
 	redisServer, _ := useRateLimitMiniRedis(t)
 	const (

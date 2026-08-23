@@ -37,6 +37,37 @@ var (
 	errOriginalPasswordFail = errors.New("original password is incorrect")
 )
 
+const (
+	registrationVerificationEmail = "email"
+	registrationVerificationSMS   = "sms"
+)
+
+func resolveRegistrationVerificationMethod(requested string, emailEnabled bool, smsEnabled bool, email string, phone string) (string, error) {
+	if !emailEnabled && !smsEnabled {
+		return "", nil
+	}
+	if emailEnabled && !smsEnabled {
+		return registrationVerificationEmail, nil
+	}
+	if smsEnabled && !emailEnabled {
+		return registrationVerificationSMS, nil
+	}
+
+	requested = strings.ToLower(strings.TrimSpace(requested))
+	if requested == registrationVerificationEmail || requested == registrationVerificationSMS {
+		return requested, nil
+	}
+	if requested == "" {
+		if email != "" && phone == "" {
+			return registrationVerificationEmail, nil
+		}
+		if phone != "" && email == "" {
+			return registrationVerificationSMS, nil
+		}
+	}
+	return "", errors.New("invalid registration verification method")
+}
+
 func Login(c *gin.Context) {
 	if !common.PasswordLoginEnabled {
 		common.ApiErrorI18n(c, i18n.MsgUserPasswordLoginDisabled)
@@ -220,6 +251,10 @@ func Register(c *gin.Context) {
 	}
 	user.Username = strings.TrimSpace(user.Username)
 	user.Email = model.NormalizeEmail(user.Email)
+	phoneInput := ""
+	if user.Phone != nil {
+		phoneInput = strings.TrimSpace(*user.Phone)
+	}
 	if user.Username == "" {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
@@ -228,7 +263,20 @@ func Register(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserInputInvalid, map[string]any{"Error": err.Error()})
 		return
 	}
-	if common.EmailVerificationEnabled {
+	verificationMethod, err := resolveRegistrationVerificationMethod(
+		user.VerificationMethod,
+		common.EmailVerificationEnabled,
+		common.SMSVerificationEnabled,
+		user.Email,
+		phoneInput,
+	)
+	if err != nil {
+		common.ApiErrorI18n(c, i18n.MsgUserVerificationMethodInvalid)
+		return
+	}
+	normalizedPhone := ""
+	switch verificationMethod {
+	case registrationVerificationEmail:
 		if user.Email == "" || user.VerificationCode == "" {
 			common.ApiErrorI18n(c, i18n.MsgUserEmailVerificationRequired)
 			return
@@ -245,9 +293,32 @@ func Register(c *gin.Context) {
 			common.ApiErrorI18n(c, i18n.MsgDatabaseError)
 			return
 		}
+	case registrationVerificationSMS:
+		var valid bool
+		normalizedPhone, valid = common.NormalizeChinaPhone(phoneInput)
+		if !valid {
+			common.ApiErrorI18n(c, i18n.MsgUserPhoneInvalid)
+			return
+		}
+		if user.VerificationCode == "" {
+			common.ApiErrorI18n(c, i18n.MsgUserPhoneVerificationRequired)
+			return
+		}
+		if !common.VerifyCodeWithKey(normalizedPhone, user.VerificationCode, common.EmailVerificationPurpose) {
+			common.ApiErrorI18n(c, i18n.MsgUserVerificationCodeError)
+			return
+		}
+		if err := model.EnsurePhoneAvailable(normalizedPhone, 0); err != nil {
+			if errors.Is(err, model.ErrPhoneAlreadyTaken) {
+				common.ApiErrorI18n(c, i18n.MsgUserPhoneAlreadyTaken)
+				return
+			}
+			common.ApiErrorI18n(c, i18n.MsgDatabaseError)
+			return
+		}
 	}
 	emailForExistCheck := ""
-	if common.EmailVerificationEnabled {
+	if verificationMethod == registrationVerificationEmail {
 		emailForExistCheck = user.Email
 	}
 	exist, err := model.CheckUserExistOrDeleted(user.Username, emailForExistCheck)
@@ -269,16 +340,31 @@ func Register(c *gin.Context) {
 		InviterId:   inviterId,
 		Role:        common.RoleCommonUser, // 明确设置角色为普通用户
 	}
-	if common.EmailVerificationEnabled {
+	if verificationMethod == registrationVerificationEmail {
 		cleanUser.Email = user.Email
+	} else if verificationMethod == registrationVerificationSMS {
+		cleanUser.Phone = &normalizedPhone
 	}
 	if err := cleanUser.Insert(inviterId); err != nil {
 		if errors.Is(err, model.ErrEmailAlreadyTaken) {
 			common.ApiErrorI18n(c, i18n.MsgUserEmailAlreadyTaken)
 			return
 		}
+		if errors.Is(err, model.ErrPhoneAlreadyTaken) {
+			common.ApiErrorI18n(c, i18n.MsgUserPhoneAlreadyTaken)
+			return
+		}
+		if errors.Is(err, model.ErrPhoneInvalid) {
+			common.ApiErrorI18n(c, i18n.MsgUserPhoneInvalid)
+			return
+		}
 		common.ApiError(c, err)
 		return
+	}
+	if verificationMethod == registrationVerificationEmail {
+		common.DeleteKey(user.Email, common.EmailVerificationPurpose)
+	} else if verificationMethod == registrationVerificationSMS {
+		common.DeleteKey(normalizedPhone, common.EmailVerificationPurpose)
 	}
 
 	// 获取插入后的用户ID
@@ -1301,6 +1387,7 @@ func EmailBind(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	common.DeleteKey(email, common.EmailVerificationPurpose)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
