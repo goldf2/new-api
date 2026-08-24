@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as authRouteRouteImport } from './routes/(auth)/route'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as HomeARouteImport } from './routes/home-a'
+import { Route as HomeBRouteImport } from './routes/home-b'
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as UserAgreementRouteImport } from './routes/user-agreement'
 import { Route as authForgotPasswordRouteImport } from './routes/(auth)/forgot-password'
@@ -80,6 +82,16 @@ const authRouteRoute = authRouteRouteImport.update({
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HomeARoute = HomeARouteImport.update({
+  id: '/home-a',
+  path: '/home-a',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HomeBRoute = HomeBRouteImport.update({
+  id: '/home-b',
+  path: '/home-b',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
@@ -396,6 +408,8 @@ const AuthenticatedSystemSettingsSiteSectionRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/home-a': typeof HomeARoute
+  '/home-b': typeof HomeBRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/user-agreement': typeof UserAgreementRoute
   '/system-settings': typeof AuthenticatedSystemSettingsRouteRouteWithChildren
@@ -455,6 +469,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/home-a': typeof HomeARoute
+  '/home-b': typeof HomeBRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/user-agreement': typeof UserAgreementRoute
   '/forgot-password': typeof authForgotPasswordRoute
@@ -516,6 +532,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/(auth)': typeof authRouteRouteWithChildren
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/home-a': typeof HomeARoute
+  '/home-b': typeof HomeBRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/user-agreement': typeof UserAgreementRoute
   '/_authenticated/system-settings': typeof AuthenticatedSystemSettingsRouteRouteWithChildren
@@ -577,6 +595,8 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/home-a'
+    | '/home-b'
     | '/privacy-policy'
     | '/user-agreement'
     | '/system-settings'
@@ -636,6 +656,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/home-a'
+    | '/home-b'
     | '/privacy-policy'
     | '/user-agreement'
     | '/forgot-password'
@@ -696,6 +718,8 @@ export interface FileRouteTypes {
     | '/'
     | '/(auth)'
     | '/_authenticated'
+    | '/home-a'
+    | '/home-b'
     | '/privacy-policy'
     | '/user-agreement'
     | '/_authenticated/system-settings'
@@ -758,6 +782,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   authRouteRoute: typeof authRouteRouteWithChildren
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  HomeARoute: typeof HomeARoute
+  HomeBRoute: typeof HomeBRoute
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   UserAgreementRoute: typeof UserAgreementRoute
   errors401Route: typeof errors401Route
@@ -794,6 +820,20 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/home-a': {
+      id: '/home-a'
+      path: '/home-a'
+      fullPath: '/home-a'
+      preLoaderRoute: typeof HomeARouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/home-b': {
+      id: '/home-b'
+      path: '/home-b'
+      fullPath: '/home-b'
+      preLoaderRoute: typeof HomeBRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy-policy': {
@@ -1329,6 +1369,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   authRouteRoute: authRouteRouteWithChildren,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  HomeARoute: HomeARoute,
+  HomeBRoute: HomeBRoute,
   PrivacyPolicyRoute: PrivacyPolicyRoute,
   UserAgreementRoute: UserAgreementRoute,
   errors401Route: errors401Route,
