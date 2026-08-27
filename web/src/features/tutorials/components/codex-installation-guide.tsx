@@ -28,6 +28,7 @@ import {
   Sparkles,
   TerminalSquare,
 } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
@@ -39,7 +40,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 const UNIX_INSTALL_COMMAND =
   'curl -fsSL https://chatgpt.com/codex/install.sh | sh'
@@ -298,6 +298,9 @@ export function CodexInstallationGuide(props: {
   windowsSetupCommand: string
 }) {
   const { t } = useTranslation()
+  const [platform, setPlatform] = useState<'unix' | 'windows'>('unix')
+  const [client, setClient] = useState<'claude' | 'codex' | 'gemini'>('codex')
+  const platformLabel = platform === 'unix' ? 'macOS / Linux' : 'Windows'
 
   return (
     <Card>
@@ -310,151 +313,157 @@ export function CodexInstallationGuide(props: {
             <CardTitle>{t('CLI installation guides')}</CardTitle>
             <CardDescription className='mt-1'>
               {t(
-                'Choose a client and operating system. Only the selected guide is shown.'
+                'Choose an operating system first, then choose an AI coding client. Only the selected guide is shown.'
               )}
             </CardDescription>
           </div>
         </div>
       </CardHeader>
       <CardContent className='space-y-4'>
-        <Tabs
-          defaultValue='codex-unix'
-          orientation='vertical'
-          className='grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]'
-        >
-          <div className='h-fit rounded-xl border p-2'>
+        <div className='grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]'>
+          <div className='h-fit space-y-4 rounded-xl border p-3'>
             <p className='text-muted-foreground px-2 pb-2 text-xs font-semibold tracking-wide'>
               {t('Installation & tutorials')}
             </p>
-            <TabsList variant='line' className='w-full items-stretch'>
-              <div
-                role='presentation'
-                className='flex items-center gap-2 px-2 py-1 text-sm font-semibold'
-              >
-                <Bot className='size-4' aria-hidden='true' />
-                <span>{t('Claude Code installation')}</span>
-                <span className='ml-auto text-[10px] font-medium text-amber-600 dark:text-amber-400'>
-                  {t('Coming soon')}
-                </span>
-              </div>
-              <TabsTrigger
-                value='claude-unix'
-                aria-label='Claude Code macOS / Linux'
-                className='min-h-9 pl-8'
-              >
-                {t('macOS / Linux')}
-              </TabsTrigger>
-              <TabsTrigger
-                value='claude-windows'
-                aria-label='Claude Code Windows'
-                className='min-h-9 pl-8'
-              >
-                {t('Windows')}
-              </TabsTrigger>
 
+            <div>
+              <p className='text-muted-foreground px-2 text-xs font-semibold'>
+                {t('1. Choose an operating system')}
+              </p>
               <div
-                role='presentation'
-                className='mt-2 flex items-center gap-2 px-2 py-1 text-sm font-semibold'
+                className='mt-2 grid gap-1'
+                role='group'
+                aria-label={t('1. Choose an operating system')}
               >
-                <TerminalSquare className='size-4' aria-hidden='true' />
-                <span>{t('Codex installation')}</span>
+                <Button
+                  type='button'
+                  variant={platform === 'unix' ? 'secondary' : 'ghost'}
+                  className='w-full justify-start'
+                  aria-pressed={platform === 'unix'}
+                  onClick={() => setPlatform('unix')}
+                >
+                  <Laptop data-icon='inline-start' />
+                  {t('macOS / Linux')}
+                </Button>
+                <Button
+                  type='button'
+                  variant={platform === 'windows' ? 'secondary' : 'ghost'}
+                  className='w-full justify-start'
+                  aria-pressed={platform === 'windows'}
+                  onClick={() => setPlatform('windows')}
+                >
+                  <MonitorCog data-icon='inline-start' />
+                  {t('Windows')}
+                </Button>
               </div>
-              <TabsTrigger
-                value='codex-unix'
-                aria-label='Codex macOS / Linux'
-                className='min-h-9 pl-8'
-              >
-                {t('macOS / Linux')}
-              </TabsTrigger>
-              <TabsTrigger
-                value='codex-windows'
-                aria-label='Codex Windows'
-                className='min-h-9 pl-8'
-              >
-                {t('Windows')}
-              </TabsTrigger>
+            </div>
 
+            <div className='border-t pt-4'>
+              <p className='text-muted-foreground px-2 text-xs font-semibold'>
+                {t('2. Choose an AI coding client')}
+              </p>
               <div
-                role='presentation'
-                className='mt-2 flex items-center gap-2 px-2 py-1 text-sm font-semibold'
+                className='mt-2 grid gap-1'
+                role='group'
+                aria-label={t('2. Choose an AI coding client')}
               >
-                <Sparkles className='size-4' aria-hidden='true' />
-                <span>{t('Gemini CLI installation')}</span>
-                <span className='ml-auto text-[10px] font-medium text-amber-600 dark:text-amber-400'>
-                  {t('Coming soon')}
-                </span>
+                <Button
+                  type='button'
+                  variant={client === 'claude' ? 'secondary' : 'ghost'}
+                  className='w-full justify-start'
+                  aria-label='Claude Code'
+                  aria-pressed={client === 'claude'}
+                  onClick={() => setClient('claude')}
+                >
+                  <Bot data-icon='inline-start' />
+                  <span>{t('Claude Code installation')}</span>
+                  <span className='ml-auto text-[10px] font-medium text-amber-600 dark:text-amber-400'>
+                    {t('Coming soon')}
+                  </span>
+                </Button>
+                <Button
+                  type='button'
+                  variant={client === 'codex' ? 'secondary' : 'ghost'}
+                  className='w-full justify-start'
+                  aria-label='Codex'
+                  aria-pressed={client === 'codex'}
+                  onClick={() => setClient('codex')}
+                >
+                  <TerminalSquare data-icon='inline-start' />
+                  {t('Codex installation')}
+                </Button>
+                <Button
+                  type='button'
+                  variant={client === 'gemini' ? 'secondary' : 'ghost'}
+                  className='w-full justify-start'
+                  aria-label='Gemini CLI'
+                  aria-pressed={client === 'gemini'}
+                  onClick={() => setClient('gemini')}
+                >
+                  <Sparkles data-icon='inline-start' />
+                  <span>{t('Gemini CLI installation')}</span>
+                  <span className='ml-auto text-[10px] font-medium text-amber-600 dark:text-amber-400'>
+                    {t('Coming soon')}
+                  </span>
+                </Button>
               </div>
-              <TabsTrigger
-                value='gemini-unix'
-                aria-label='Gemini CLI macOS / Linux'
-                className='min-h-9 pl-8'
-              >
-                {t('macOS / Linux')}
-              </TabsTrigger>
-              <TabsTrigger
-                value='gemini-windows'
-                aria-label='Gemini CLI Windows'
-                className='min-h-9 pl-8'
-              >
-                {t('Windows')}
-              </TabsTrigger>
-            </TabsList>
+            </div>
           </div>
 
-          <TabsContent value='claude-unix'>
-            <ComingSoonGuide product='Claude Code' platform='macOS / Linux' />
-          </TabsContent>
+          <div>
+            {client === 'claude' && (
+              <ComingSoonGuide product='Claude Code' platform={platformLabel} />
+            )}
 
-          <TabsContent value='claude-windows'>
-            <ComingSoonGuide product='Claude Code' platform='Windows' />
-          </TabsContent>
+            {client === 'codex' && platform === 'unix' && (
+              <>
+                <PlatformGuide
+                  title={t('macOS / Linux Codex installation guide')}
+                  subtitle={t(
+                    'Install the official Codex CLI on macOS or Linux.'
+                  )}
+                  requirement={t(
+                    'A supported macOS or Linux system, a terminal, and internet access.'
+                  )}
+                  installCommand={UNIX_INSTALL_COMMAND}
+                  installDescription={t(
+                    'Recommended. This installer does not require you to install Node.js first.'
+                  )}
+                  setupCommand={props.unixSetupCommand}
+                  setupDescription={t(
+                    'Use the copy button, paste the command into Terminal, and run it.'
+                  )}
+                />
+                <CodexGuideFooter />
+              </>
+            )}
 
-          <TabsContent value='codex-unix'>
-            <PlatformGuide
-              title={t('macOS / Linux Codex installation guide')}
-              subtitle={t('Install the official Codex CLI on macOS or Linux.')}
-              requirement={t(
-                'A supported macOS or Linux system, a terminal, and internet access.'
-              )}
-              installCommand={UNIX_INSTALL_COMMAND}
-              installDescription={t(
-                'Recommended. This installer does not require you to install Node.js first.'
-              )}
-              setupCommand={props.unixSetupCommand}
-              setupDescription={t(
-                'Use the copy button, paste the command into Terminal, and run it.'
-              )}
-            />
-            <CodexGuideFooter />
-          </TabsContent>
+            {client === 'codex' && platform === 'windows' && (
+              <>
+                <PlatformGuide
+                  title={t('Windows Codex installation guide')}
+                  subtitle={t('Install the official Codex CLI on Windows.')}
+                  requirement={t(
+                    'Windows with PowerShell and internet access. Use a local PowerShell window when possible.'
+                  )}
+                  installCommand={WINDOWS_INSTALL_COMMAND}
+                  installDescription={t(
+                    'Recommended. Run this command in PowerShell and reopen PowerShell after it finishes.'
+                  )}
+                  setupCommand={props.windowsSetupCommand}
+                  setupDescription={t(
+                    'Use the copy button. If you paste through remote desktop, verify that the URL remains plain text and was not converted into a Markdown link.'
+                  )}
+                />
+                <CodexGuideFooter />
+              </>
+            )}
 
-          <TabsContent value='codex-windows'>
-            <PlatformGuide
-              title={t('Windows Codex installation guide')}
-              subtitle={t('Install the official Codex CLI on Windows.')}
-              requirement={t(
-                'Windows with PowerShell and internet access. Use a local PowerShell window when possible.'
-              )}
-              installCommand={WINDOWS_INSTALL_COMMAND}
-              installDescription={t(
-                'Recommended. Run this command in PowerShell and reopen PowerShell after it finishes.'
-              )}
-              setupCommand={props.windowsSetupCommand}
-              setupDescription={t(
-                'Use the copy button. If you paste through remote desktop, verify that the URL remains plain text and was not converted into a Markdown link.'
-              )}
-            />
-            <CodexGuideFooter />
-          </TabsContent>
-
-          <TabsContent value='gemini-unix'>
-            <ComingSoonGuide product='Gemini CLI' platform='macOS / Linux' />
-          </TabsContent>
-
-          <TabsContent value='gemini-windows'>
-            <ComingSoonGuide product='Gemini CLI' platform='Windows' />
-          </TabsContent>
-        </Tabs>
+            {client === 'gemini' && (
+              <ComingSoonGuide product='Gemini CLI' platform={platformLabel} />
+            )}
+          </div>
+        </div>
       </CardContent>
     </Card>
   )

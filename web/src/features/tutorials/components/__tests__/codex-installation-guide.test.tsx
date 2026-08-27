@@ -31,6 +31,20 @@ describe('Codex installation guide', () => {
   test('shows the official macOS and Linux installer by default', () => {
     render(<CodexInstallationGuide {...guideProps} />)
 
+    const platformStep = screen.getByText('1. Choose an operating system')
+    const clientStep = screen.getByText('2. Choose an AI coding client')
+
+    expect(
+      platformStep.compareDocumentPosition(clientStep) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: 'macOS / Linux' })
+    ).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Codex' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
     expect(
       screen.getByText('curl -fsSL https://chatgpt.com/codex/install.sh | sh')
     ).toBeInTheDocument()
@@ -46,7 +60,7 @@ describe('Codex installation guide', () => {
     const user = userEvent.setup()
     render(<CodexInstallationGuide {...guideProps} />)
 
-    await user.click(screen.getByRole('tab', { name: 'Codex Windows' }))
+    await user.click(screen.getByRole('button', { name: 'Windows' }))
 
     expect(
       screen.getByText(
@@ -61,22 +75,21 @@ describe('Codex installation guide', () => {
     const user = userEvent.setup()
     render(<CodexInstallationGuide {...guideProps} />)
 
-    const claudeTab = screen.getByRole('tab', {
-      name: 'Claude Code macOS / Linux',
-    })
-    await user.click(claudeTab)
+    const claudeButton = screen.getByRole('button', { name: 'Claude Code' })
+    await user.click(claudeButton)
 
     expect(screen.getByText('Tutorial coming soon')).toBeInTheDocument()
-    expect(claudeTab).toHaveAttribute('aria-selected', 'true')
+    expect(claudeButton).toHaveAttribute('aria-pressed', 'true')
     expect(screen.queryByText('UNIX_SETUP_COMMAND')).not.toBeInTheDocument()
     expect(
       screen.queryByText('Open the official Codex guide')
     ).not.toBeInTheDocument()
 
-    const geminiTab = screen.getByRole('tab', { name: 'Gemini CLI Windows' })
-    await user.click(geminiTab)
+    await user.click(screen.getByRole('button', { name: 'Windows' }))
+    const geminiButton = screen.getByRole('button', { name: 'Gemini CLI' })
+    await user.click(geminiButton)
 
-    expect(geminiTab).toHaveAttribute('aria-selected', 'true')
+    expect(geminiButton).toHaveAttribute('aria-pressed', 'true')
     expect(screen.queryByText('WINDOWS_SETUP_COMMAND')).not.toBeInTheDocument()
   })
 
