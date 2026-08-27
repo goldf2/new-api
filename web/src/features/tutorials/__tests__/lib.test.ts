@@ -51,8 +51,9 @@ describe('tutorial configuration examples', () => {
     const codexConfig = buildCodexConfig(baseUrl)
 
     expect(codexConfig).toContain('base_url = "https://gateway.example/v1"')
-    expect(codexConfig).toContain('[profiles.newapi]')
-    expect(codexConfig.startsWith('[model_providers.newapi]')).toBe(true)
+    expect(codexConfig).not.toContain('[profiles.newapi]')
+    expect(codexConfig.startsWith('model = "YOUR_MODEL_ID"')).toBe(true)
+    expect(codexConfig).toContain('model_provider = "newapi"')
   })
 
   test('builds one-line installers hosted by the current site', () => {
@@ -60,12 +61,12 @@ describe('tutorial configuration examples', () => {
     const baseUrl = getApiBaseUrl(origin)
 
     expect(buildUnixInstallerCommand(origin, baseUrl)).toBe(
-      'curl -fsSL "https://gateway.example/scripts/setup-codex-newapi.sh" | bash -s -- --base-url "https://gateway.example/v1"'
+      'curl -fsSL "https://gateway.example/scripts/setup-codex-newapi.sh" | bash -s -- install --base-url "https://gateway.example/v1"'
     )
     const windowsCommand = buildWindowsInstallerCommand(origin, baseUrl)
 
     expect(windowsCommand).toBe(
-      '$script = Invoke-RestMethod -Uri "https://gateway.example/scripts/setup-codex-newapi.ps1"; & ([ScriptBlock]::Create($script)) -BaseUrl "https://gateway.example/v1"'
+      '$script = Invoke-RestMethod -Uri "https://gateway.example/scripts/setup-codex-newapi.ps1"; & ([ScriptBlock]::Create($script)) -Action InstallCli -BaseUrl "https://gateway.example/v1"'
     )
   })
 
@@ -75,7 +76,7 @@ describe('tutorial configuration examples', () => {
     expect(script.subarray(0, 3)).toEqual(Buffer.from('[Cm'))
   })
 
-  test('keeps official-login Codex subcommands outside the isolated CLI config', () => {
+  test('uses a shared history store with a named profile', () => {
     const windowsScript = readFileSync(
       'public/scripts/setup-codex-newapi.ps1',
       'utf8'
@@ -85,11 +86,17 @@ describe('tutorial configuration examples', () => {
       'utf8'
     )
 
-    for (const subcommand of ['app', 'remote-control', 'cloud']) {
-      expect(windowsScript).toContain(`"%~1"=="${subcommand}"`)
-    }
-    expect(unixScript).toContain('app|remote-control|cloud)')
-    expect(windowsScript).toContain('请输入 GLOBAL 继续')
-    expect(unixScript).toContain('请输入 GLOBAL 继续')
+    expect(windowsScript).toContain(
+      "$Script:ProfileConfig = Join-Path $Script:GlobalHome 'newapi.config.toml'"
+    )
+    expect(unixScript).toContain(
+      'PROFILE_CONFIG="$GLOBAL_HOME/newapi.config.toml"'
+    )
+    expect(windowsScript).toContain('--profile newapi')
+    expect(unixScript).toContain('--profile newapi')
+    expect(windowsScript).not.toContain('set "CODEX_HOME=')
+    expect(unixScript).not.toContain('CODEX_HOME=$quoted_home')
+    expect(windowsScript).not.toContain('请输入 GLOBAL 继续')
+    expect(unixScript).not.toContain('请输入 GLOBAL 继续')
   })
 })

@@ -21,10 +21,13 @@ if ($env:OS -ne 'Windows_NT') {
     throw '此脚本仅支持 Windows。macOS 和 Linux 请使用 setup-codex-newapi.sh。'
 }
 
-$Script:TargetHome = Join-Path $env:USERPROFILE '.codex-na'
+$Script:LegacyHome = Join-Path $env:USERPROFILE '.codex-na'
 $Script:ManagerHome = Join-Path $env:USERPROFILE '.codex-newapi-manager'
 $Script:GlobalHome = Join-Path $env:USERPROFILE '.codex'
 $Script:GlobalConfig = Join-Path $Script:GlobalHome 'config.toml'
+$Script:ProfileConfig = Join-Path $Script:GlobalHome 'newapi.config.toml'
+$Script:ProfileBackup = Join-Path $Script:ManagerHome 'newapi.config.toml.before-newapi'
+$Script:ProfileOriginalState = Join-Path $Script:ManagerHome 'profile-original-state'
 $Script:GlobalBackup = Join-Path $Script:ManagerHome 'config.toml.before-newapi'
 $Script:GlobalOriginalState = Join-Path $Script:ManagerHome 'global-original-state'
 $Script:ModeFile = Join-Path $Script:ManagerHome 'mode'
@@ -32,7 +35,8 @@ $Script:CredentialDir = Join-Path $Script:ManagerHome 'credentials'
 $Script:CredentialFile = Join-Path $Script:CredentialDir 'newapi-key.dpapi'
 $Script:HelperDir = Join-Path $Script:ManagerHome 'bin'
 $Script:CredentialHelper = Join-Path $Script:HelperDir 'get-newapi-key.ps1'
-$Script:CliWrapper = Join-Path $Script:HelperDir 'codex.cmd'
+$Script:CliWrapper = Join-Path $Script:HelperDir 'codex-newapi.cmd'
+$Script:LegacyCliWrapper = Join-Path $Script:HelperDir 'codex.cmd'
 $Script:PowerShellExe = (Get-Process -Id $PID).Path
 
 function Get-Timestamp {
@@ -209,14 +213,25 @@ function Get-ProviderConfig {
         (Get-ProviderTablesConfig).TrimStart()
 }
 
-function Write-IsolatedConfig {
-    Ensure-Directory $Script:TargetHome
-    $config = Join-Path $Script:TargetHome 'config.toml'
-    if (Test-Path -LiteralPath $config -PathType Leaf) {
-        Copy-Item -LiteralPath $config -Destination "$($config).backup.$(Get-Timestamp)" -Force
+function Prepare-ProfileBackup {
+    Ensure-Directory $Script:ManagerHome
+    if (Test-Path -LiteralPath $Script:ProfileOriginalState -PathType Leaf) {
+        return
     }
-    Write-Utf8NoBom -Path $config -Content (Get-ProviderConfig)
-    Write-Host 'Codex 配置已保存。'
+    if (Test-Path -LiteralPath $Script:ProfileConfig -PathType Leaf) {
+        Copy-Item -LiteralPath $Script:ProfileConfig -Destination $Script:ProfileBackup -Force
+        Write-Utf8NoBom -Path $Script:ProfileOriginalState -Content 'present'
+    }
+    else {
+        Write-Utf8NoBom -Path $Script:ProfileOriginalState -Content 'missing'
+    }
+}
+
+function Write-ProfileConfig {
+    Prepare-ProfileBackup
+    Ensure-Directory $Script:GlobalHome
+    Write-Utf8NoBom -Path $Script:ProfileConfig -Content (Get-ProviderConfig)
+    Write-Host 'New API profile 已保存，官方配置和历史记录未改动。'
 }
 
 function Get-PathWithoutWrapper {
@@ -237,14 +252,7 @@ function Install-CliWrapper {
     Ensure-Directory $Script:HelperDir
     $wrapper = @"
 @echo off
-if /I "%~1"=="app" goto official
-if /I "%~1"=="remote-control" goto official
-if /I "%~1"=="cloud" goto official
-set "CODEX_HOME=$Script:TargetHome"
-call "$codexPath" %*
-exit /b %ERRORLEVEL%
-:official
-call "$codexPath" %*
+call "$codexPath" --profile newapi %*
 "@
     Write-SystemEncodedText -Path $Script:CliWrapper -Content $wrapper
 
@@ -260,7 +268,10 @@ call "$codexPath" %*
 
     $cleanProcessPath = Get-PathWithoutWrapper $env:Path
     $env:Path = $Script:HelperDir + ';' + $cleanProcessPath
-    Write-Host 'Codex 默认入口已设置。'
+    if (Test-Path -LiteralPath $Script:LegacyCliWrapper -PathType Leaf) {
+        Remove-Item -LiteralPath $Script:LegacyCliWrapper -Force
+    }
+    Write-Host 'codex-newapi 命令已设置。'
 }
 
 function Remove-CliWrapper {
@@ -269,6 +280,9 @@ function Remove-CliWrapper {
     $env:Path = Get-PathWithoutWrapper $env:Path
     if (Test-Path -LiteralPath $Script:CliWrapper -PathType Leaf) {
         Remove-Item -LiteralPath $Script:CliWrapper -Force
+    }
+    if (Test-Path -LiteralPath $Script:LegacyCliWrapper -PathType Leaf) {
+        Remove-Item -LiteralPath $Script:LegacyCliWrapper -Force
     }
 }
 
@@ -287,6 +301,9 @@ function Get-Mode {
     if (Test-Path -LiteralPath $Script:ModeFile -PathType Leaf) {
         return [System.IO.File]::ReadAllText($Script:ModeFile).Trim()
     }
+    if (Test-Path -LiteralPath $Script:ProfileConfig -PathType Leaf) {
+        return 'profile'
+    }
     if (Test-Path -LiteralPath $Script:CliWrapper -PathType Leaf) {
         return 'cli'
     }
@@ -296,74 +313,31 @@ function Get-Mode {
     'official'
 }
 
-function Prepare-GlobalBackup {
-    Ensure-ManagerHome
-    if (Test-Path -LiteralPath $Script:GlobalOriginalState -PathType Leaf) {
+function Restore-ProfileConfig {
+    if (-not (Test-Path -LiteralPath $Script:ProfileOriginalState -PathType Leaf)) {
         return
     }
-    if (Test-Path -LiteralPath $Script:GlobalConfig -PathType Leaf) {
-        Copy-Item -LiteralPath $Script:GlobalConfig -Destination $Script:GlobalBackup -Force
-        Write-Utf8NoBom -Path $Script:GlobalOriginalState -Content 'present'
-    }
-    else {
-        Write-Utf8NoBom -Path $Script:GlobalOriginalState -Content 'missing'
-    }
-}
 
-function Write-GlobalConfig {
-    Prepare-GlobalBackup
-    Ensure-Directory $Script:GlobalHome
-
-    $preserved = New-Object 'System.Collections.Generic.List[string]'
-    $state = [System.IO.File]::ReadAllText($Script:GlobalOriginalState).Trim()
-    if ($state -eq 'present') {
-        if (-not (Test-Path -LiteralPath $Script:GlobalBackup -PathType Leaf)) {
-            throw '找不到原配置备份，已停止以避免覆盖现有配置。'
+    $state = [System.IO.File]::ReadAllText($Script:ProfileOriginalState).Trim()
+    switch ($state) {
+        'present' {
+            if (-not (Test-Path -LiteralPath $Script:ProfileBackup -PathType Leaf)) {
+                throw '找不到原 profile 备份，无法安全恢复。'
+            }
+            Copy-Item -LiteralPath $Script:ProfileBackup -Destination $Script:ProfileConfig -Force
         }
-
-        $topLevel = $true
-        $skipNewApi = $false
-        foreach ($line in [System.IO.File]::ReadAllLines($Script:GlobalBackup)) {
-            if ($line -match '^\s*\[') {
-                $topLevel = $false
-                if ($line -match '^\s*\[model_providers\.newapi(\.[^]]+)?\]\s*$') {
-                    $skipNewApi = $true
-                    continue
-                }
-                $skipNewApi = $false
+        'missing' {
+            if (Test-Path -LiteralPath $Script:ProfileConfig -PathType Leaf) {
+                Move-Item -LiteralPath $Script:ProfileConfig -Destination "$($Script:ProfileConfig).newapi-removed.$(Get-Timestamp)"
             }
-            if ($skipNewApi) {
-                continue
-            }
-            if ($topLevel -and $line -match '^\s*model\s*=') {
-                continue
-            }
-            if ($topLevel -and $line -match '^\s*model_provider\s*=') {
-                continue
-            }
-            if ($topLevel -and $line -match '^\s*model_reasoning_effort\s*=') {
-                continue
-            }
-            [void]$preserved.Add($line)
+        }
+        default {
+            throw '无法识别原 profile 状态，已停止以避免误操作。'
         }
     }
-    elseif ($state -ne 'missing') {
-        throw '无法识别原配置状态，已停止以避免误操作。'
-    }
 
-    $topLevelConfig = (Get-TopLevelConfig).TrimEnd()
-    $providerTables = (Get-ProviderTablesConfig).Trim()
-    if ($preserved.Count -gt 0) {
-        $lines = $topLevelConfig + [Environment]::NewLine + [Environment]::NewLine +
-            ($preserved -join [Environment]::NewLine).Trim() + [Environment]::NewLine +
-            [Environment]::NewLine + $providerTables + [Environment]::NewLine
-    }
-    else {
-        $lines = $topLevelConfig + [Environment]::NewLine + [Environment]::NewLine +
-            $providerTables + [Environment]::NewLine
-    }
-    Write-Utf8NoBom -Path $Script:GlobalConfig -Content $lines
-    Write-Host '默认 Codex 配置已切换到 New API。'
+    Remove-Item -LiteralPath $Script:ProfileBackup -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $Script:ProfileOriginalState -Force -ErrorAction SilentlyContinue
 }
 
 function Restore-GlobalConfig {
@@ -399,27 +373,15 @@ function Install-CliMode {
         Restore-GlobalConfig
     }
     Save-Credential
-    Write-IsolatedConfig
+    Write-ProfileConfig
     Install-CliWrapper
-    Set-Mode 'cli'
+    Set-Mode 'profile'
 
     Write-Host ''
-    Write-Host '方式 1 已启用：终端 Codex CLI 将使用 New API。'
-    Write-Host 'Codex App、ChatGPT 登录、Cloud 和 Remote Control 保持官方入口。'
+    Write-Host 'New API profile 已启用。'
+    Write-Host 'Codex App、ChatGPT 登录、Cloud、Remote Control 和历史记录保持不变。'
     Write-Host ''
-    Write-Host '重新打开终端，然后输入：codex'
-}
-
-function Install-GlobalMode {
-    Remove-CliWrapper
-    Save-Credential
-    Write-GlobalConfig
-    Set-Mode 'global'
-
-    Write-Host ''
-    Write-Host '方式 2 已启用：默认 Codex 配置将使用 New API。'
-    Write-Host 'Codex App、ChatGPT 登录、Cloud 和 Remote Control 将无法使用该默认配置。'
-    Write-Host '如需恢复，请重新运行脚本并选择“恢复官方默认”。'
+    Write-Host '重新打开终端，然后输入：codex-newapi'
 }
 
 function Rotate-Credential {
@@ -430,8 +392,9 @@ function Rotate-Credential {
 
 function Show-Status {
     switch (Get-Mode) {
-        'cli' { Write-Host "`n当前模式：方式 1，仅接管终端 Codex CLI" }
-        'global' { Write-Host "`n当前模式：方式 2，接管默认 Codex 配置" }
+        'profile' { Write-Host "`n当前模式：New API profile（共用官方历史）" }
+        'global' { Write-Host "`n当前模式：旧版全局配置，请运行 InstallCli 安全迁移" }
+        'cli' { Write-Host "`n当前模式：旧版隔离配置，请运行 InstallCli 共用历史" }
         default { Write-Host "`n当前模式：官方默认" }
     }
     if (Test-Credential) {
@@ -452,11 +415,12 @@ function Restore-Default {
 
     Remove-CliWrapper
     Restore-GlobalConfig
+    Restore-ProfileConfig
     if ($DeleteKey) {
         Remove-Credential
     }
-    if (Test-Path -LiteralPath $Script:TargetHome -PathType Container) {
-        Move-Item -LiteralPath $Script:TargetHome -Destination "$($Script:TargetHome).removed.$(Get-Timestamp)"
+    if (Test-Path -LiteralPath $Script:LegacyHome -PathType Container) {
+        Move-Item -LiteralPath $Script:LegacyHome -Destination "$($Script:LegacyHome).removed.$(Get-Timestamp)"
     }
     Remove-Item -LiteralPath $Script:ModeFile -Force -ErrorAction SilentlyContinue
 
@@ -472,14 +436,6 @@ function Confirm-Action {
     $answer -match '^(y|yes)$'
 }
 
-function Confirm-GlobalMode {
-    Write-Host ''
-    Write-Host '警告：方式 2 会修改默认 ~/.codex/config.toml。'
-    Write-Host 'Codex App、ChatGPT 登录、Cloud 和 Remote Control 将无法使用，直到恢复官方默认。'
-    $answer = Read-Host '如已理解，请输入 GLOBAL 继续'
-    $answer -ceq 'GLOBAL'
-}
-
 function Pause-Menu {
     [void](Read-Host "`n按回车返回菜单")
 }
@@ -489,15 +445,12 @@ function Show-InteractiveMenu {
         Write-Host ''
         Write-Host 'Codex New API 管理'
         Write-Host ''
-        Write-Host '  1. 仅接管终端 Codex CLI（推荐）'
-        Write-Host '     Codex App、ChatGPT 登录、Cloud 和 Remote Control 保持不变'
+        Write-Host '  1. 配置 New API profile（推荐）'
+        Write-Host '     共用 Codex 历史，官方登录和桌面端保持不变'
         Write-Host ''
-        Write-Host '  2. 高级：接管默认 Codex 配置'
-        Write-Host '     会停用依赖官方登录的 Codex App、Cloud 和 Remote Control'
-        Write-Host ''
-        Write-Host '  3. 更换 New API 密钥'
-        Write-Host '  4. 查看当前状态'
-        Write-Host '  5. 移除 New API 配置，恢复官方默认'
+        Write-Host '  2. 更换 New API 密钥'
+        Write-Host '  3. 查看当前状态'
+        Write-Host '  4. 移除 New API 配置，恢复官方默认'
         Write-Host '  0. 退出'
         Write-Host ''
         $choice = Read-Host '请选择'
@@ -508,23 +461,14 @@ function Show-InteractiveMenu {
                 Pause-Menu
             }
             '2' {
-                if (Confirm-GlobalMode) {
-                    Install-GlobalMode
-                }
-                else {
-                    Write-Host "`n已取消。"
-                }
-                Pause-Menu
-            }
-            '3' {
                 Rotate-Credential
                 Pause-Menu
             }
-            '4' {
+            '3' {
                 Show-Status
                 Pause-Menu
             }
-            '5' {
+            '4' {
                 if (Confirm-Action '恢复官方默认？') {
                     $deleteKey = Confirm-Action '同时删除已保存的 New API 密钥？'
                     Restore-Default -DeleteKey $deleteKey
@@ -539,7 +483,7 @@ function Show-InteractiveMenu {
                 return
             }
             default {
-                Write-Host "`n请输入 0-5。"
+                Write-Host "`n请输入 0-4。"
             }
         }
     }
@@ -561,12 +505,8 @@ try {
         'Menu' { Show-InteractiveMenu }
         'InstallCli' { Install-CliMode }
         'InstallGlobal' {
-            if (Confirm-GlobalMode) {
-                Install-GlobalMode
-            }
-            else {
-                Write-Host "`n已取消。"
-            }
+            Write-Warning '旧版 InstallGlobal 模式已停用，正在迁移到共用历史的 New API profile。'
+            Install-CliMode
         }
         'RotateKey' { Rotate-Credential }
         'Status' { Show-Status }

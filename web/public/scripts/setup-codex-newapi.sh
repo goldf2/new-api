@@ -14,10 +14,13 @@ ACTION="menu"
 BASE_URL="$DEFAULT_BASE_URL"
 MODEL="$DEFAULT_MODEL"
 REASONING="$DEFAULT_REASONING"
-TARGET_HOME="${CODEX_NEWAPI_HOME:-$HOME/.codex-na}"
+LEGACY_HOME="${CODEX_NEWAPI_HOME:-$HOME/.codex-na}"
 MANAGER_HOME="${CODEX_NEWAPI_MANAGER_HOME:-$HOME/.codex-newapi-manager}"
-GLOBAL_HOME="$HOME/.codex"
+GLOBAL_HOME="${CODEX_NEWAPI_GLOBAL_HOME:-$HOME/.codex}"
 GLOBAL_CONFIG="$GLOBAL_HOME/config.toml"
+PROFILE_CONFIG="$GLOBAL_HOME/newapi.config.toml"
+PROFILE_BACKUP="$MANAGER_HOME/newapi.config.toml.before-newapi"
+PROFILE_ORIGINAL_STATE="$MANAGER_HOME/profile-original-state"
 GLOBAL_BACKUP="$MANAGER_HOME/config.toml.before-newapi"
 GLOBAL_ORIGINAL_STATE="$MANAGER_HOME/global-original-state"
 MODE_FILE="$MANAGER_HOME/mode"
@@ -52,7 +55,6 @@ usage() {
 Usage:
   $SCRIPT_NAME
   $SCRIPT_NAME install [options]
-  $SCRIPT_NAME global [options]
   $SCRIPT_NAME rotate-key
   $SCRIPT_NAME status [options]
   $SCRIPT_NAME restore [options]
@@ -61,16 +63,15 @@ Options:
   --base-url URL       New API base URL (default: $DEFAULT_BASE_URL)
   --model MODEL        Default model (default: $DEFAULT_MODEL)
   --reasoning LEVEL    minimal|low|medium|high|xhigh (default: $DEFAULT_REASONING)
-  --codex-home PATH    Isolated Codex home (default: ~/.codex-na)
   --shell-rc PATH      Shell startup file to update
   --dry-run            Show detected settings without changing files or credentials
   -h, --help           Show this help
 
 Run without arguments to open the interactive menu.
 
-"install" redirects ordinary terminal Codex CLI sessions only. Codex App,
-Cloud and Remote Control continue using the official configuration. "global"
-changes ~/.codex and disables those official-login features until restored.
+"install" adds ~/.codex/newapi.config.toml and a codex-newapi command. It keeps
+the official login, auth.json, shared history, Codex App, Cloud and Remote
+Control unchanged. The legacy "global" action now performs this safe install.
 EOF
 }
 
@@ -93,11 +94,6 @@ while [ "$#" -gt 0 ]; do
     --reasoning)
       [ "$#" -ge 2 ] || die "--reasoning requires a value"
       REASONING="$2"
-      shift 2
-      ;;
-    --codex-home)
-      [ "$#" -ge 2 ] || die "--codex-home requires a value"
-      TARGET_HOME="$2"
       shift 2
       ;;
     --shell-rc)
@@ -130,10 +126,6 @@ esac
 
 case "$BASE_URL" in
   *\"*|*\\*|*' '*) die "base URL contains unsupported whitespace or quoting characters" ;;
-esac
-
-case "$TARGET_HOME" in
-  *\'*) die "--codex-home cannot contain a single quote" ;;
 esac
 
 detect_platform() {
@@ -293,7 +285,7 @@ EOF
     warn "Secret Service storage failed; using a mode-600 credential file"
   fi
 
-  local credential_dir="$TARGET_HOME/credentials"
+  local credential_dir="$MANAGER_HOME/credentials"
   local credential_file="$credential_dir/newapi.key"
   mkdir -p "$credential_dir"
   chmod 700 "$credential_dir"
@@ -302,7 +294,7 @@ EOF
   unset api_key
   chmod 600 "$credential_file"
 
-  local helper_dir="$TARGET_HOME/bin"
+  local helper_dir="$MANAGER_HOME/bin"
   local helper_file="$helper_dir/get-newapi-key"
   mkdir -p "$helper_dir"
   chmod 700 "$helper_dir"
@@ -337,14 +329,27 @@ configure_credential() {
   fi
 }
 
-write_config() {
-  mkdir -p "$TARGET_HOME"
-  chmod 700 "$TARGET_HOME"
+prepare_profile_backup() {
+  ensure_manager_home
+  if [ -f "$PROFILE_ORIGINAL_STATE" ]; then
+    return
+  fi
+  if [ -f "$PROFILE_CONFIG" ]; then
+    cp -p "$PROFILE_CONFIG" "$PROFILE_BACKUP"
+    chmod 600 "$PROFILE_BACKUP"
+    printf 'present\n' > "$PROFILE_ORIGINAL_STATE"
+  else
+    printf 'missing\n' > "$PROFILE_ORIGINAL_STATE"
+  fi
+  chmod 600 "$PROFILE_ORIGINAL_STATE"
+}
 
-  local config="$TARGET_HOME/config.toml"
-  backup_file "$config"
+write_profile_config() {
+  prepare_profile_backup
+  mkdir -p "$GLOBAL_HOME"
+  chmod 700 "$GLOBAL_HOME"
   umask 077
-  cat > "$config" <<EOF
+  cat > "$PROFILE_CONFIG" <<EOF
 model = "$MODEL"
 model_provider = "newapi"
 model_reasoning_effort = "$REASONING"
@@ -363,8 +368,8 @@ args = $AUTH_ARGS
 timeout_ms = 5000
 refresh_interval_ms = 0
 EOF
-  chmod 600 "$config"
-  log "Codex 配置已保存"
+  chmod 600 "$PROFILE_CONFIG"
+  log "New API profile 已保存，官方配置和历史记录未改动"
 }
 
 ensure_manager_home() {
@@ -381,8 +386,10 @@ set_mode() {
 get_mode() {
   if [ -f "$MODE_FILE" ]; then
     sed -n '1p' "$MODE_FILE"
+  elif [ -f "$PROFILE_CONFIG" ]; then
+    printf 'profile\n'
   elif [ -f "$SHELL_RC" ] && grep -qF "$MANAGED_BEGIN" "$SHELL_RC"; then
-    printf 'cli\n'
+    printf 'legacy-cli\n'
   elif [ -f "$GLOBAL_ORIGINAL_STATE" ]; then
     printf 'global\n'
   else
@@ -390,87 +397,32 @@ get_mode() {
   fi
 }
 
+restore_profile_config() {
+  [ -f "$PROFILE_ORIGINAL_STATE" ] || return 0
+
+  case "$(sed -n '1p' "$PROFILE_ORIGINAL_STATE")" in
+    present)
+      [ -f "$PROFILE_BACKUP" ] || die "找不到原 profile 备份，无法安全恢复"
+      cp -p "$PROFILE_BACKUP" "$PROFILE_CONFIG"
+      ;;
+    missing)
+      if [ -f "$PROFILE_CONFIG" ]; then
+        mv "$PROFILE_CONFIG" "$PROFILE_CONFIG.newapi-removed.$(timestamp)"
+      fi
+      ;;
+    *)
+      die "无法识别原 profile 状态，已停止以避免误操作"
+      ;;
+  esac
+
+  rm -f "$PROFILE_BACKUP" "$PROFILE_ORIGINAL_STATE"
+}
+
 remove_shell_wrapper() {
   if [ -f "$SHELL_RC" ] && grep -qF "$MANAGED_BEGIN" "$SHELL_RC"; then
     backup_file "$SHELL_RC"
     remove_managed_block "$SHELL_RC"
   fi
-}
-
-prepare_global_backup() {
-  ensure_manager_home
-  if [ -f "$GLOBAL_ORIGINAL_STATE" ]; then
-    return
-  fi
-
-  if [ -f "$GLOBAL_CONFIG" ]; then
-    cp -p "$GLOBAL_CONFIG" "$GLOBAL_BACKUP"
-    chmod 600 "$GLOBAL_BACKUP"
-    printf 'present\n' > "$GLOBAL_ORIGINAL_STATE"
-  else
-    printf 'missing\n' > "$GLOBAL_ORIGINAL_STATE"
-  fi
-  chmod 600 "$GLOBAL_ORIGINAL_STATE"
-}
-
-write_global_config() {
-  prepare_global_backup
-  mkdir -p "$GLOBAL_HOME"
-  chmod 700 "$GLOBAL_HOME"
-
-  local source_config="/dev/null"
-  local tmp="$GLOBAL_CONFIG.codex-newapi.tmp.$$"
-  if [ "$(sed -n '1p' "$GLOBAL_ORIGINAL_STATE")" = "present" ]; then
-    [ -f "$GLOBAL_BACKUP" ] || die "找不到原配置备份，已停止以避免覆盖现有配置"
-    source_config="$GLOBAL_BACKUP"
-  fi
-
-  umask 077
-  cat > "$tmp" <<EOF
-# New API managed defaults
-model = "$MODEL"
-model_provider = "newapi"
-model_reasoning_effort = "$REASONING"
-
-EOF
-
-  awk '
-    BEGIN { top_level = 1; skip_newapi = 0 }
-    /^[[:space:]]*\[/ {
-      top_level = 0
-      if ($0 ~ /^[[:space:]]*\[model_providers\.newapi([.][^]]+)?\][[:space:]]*$/) {
-        skip_newapi = 1
-        next
-      }
-      skip_newapi = 0
-    }
-    skip_newapi { next }
-    top_level && /^[[:space:]]*model[[:space:]]*=/ { next }
-    top_level && /^[[:space:]]*model_provider[[:space:]]*=/ { next }
-    top_level && /^[[:space:]]*model_reasoning_effort[[:space:]]*=/ { next }
-    { print }
-  ' "$source_config" >> "$tmp"
-
-  cat >> "$tmp" <<EOF
-
-[model_providers.newapi]
-name = "New API"
-base_url = "$BASE_URL"
-wire_api = "responses"
-request_max_retries = 4
-stream_max_retries = 10
-stream_idle_timeout_ms = 300000
-
-[model_providers.newapi.auth]
-command = "$AUTH_COMMAND"
-args = $AUTH_ARGS
-timeout_ms = 5000
-refresh_interval_ms = 0
-EOF
-
-  chmod 600 "$tmp"
-  mv "$tmp" "$GLOBAL_CONFIG"
-  log "默认 Codex 配置已切换到 New API"
 }
 
 restore_global_config() {
@@ -506,47 +458,29 @@ write_shell_wrapper() {
   fi
   remove_managed_block "$SHELL_RC"
 
-  local quoted_home quoted_bin
-  printf -v quoted_home '%q' "$TARGET_HOME"
+  local quoted_bin
   printf -v quoted_bin '%q' "$CODEX_BIN"
 
   cat >> "$SHELL_RC" <<EOF
 
 $MANAGED_BEGIN
-# Terminal Codex defaults to the isolated New API provider.
-# Official-login subcommands continue using ~/.codex.
-codex() {
-  case "\${1:-}" in
-    app|remote-control|cloud)
-      $quoted_bin "\$@"
-      ;;
-    *)
-      CODEX_HOME=$quoted_home $quoted_bin "\$@"
-      ;;
-  esac
+# New API uses a named profile while sharing the official Codex history store.
+codex-newapi() {
+  $quoted_bin --profile newapi "\$@"
 }
 $MANAGED_END
 EOF
-  log "Codex 默认入口已设置"
+  log "codex-newapi 命令已设置"
 }
 
 print_cli_summary() {
   cat <<'EOF'
 
-方式 1 已启用：终端 Codex CLI 将使用 New API。
-Codex App、ChatGPT 登录、Cloud 和 Remote Control 保持官方入口。
+New API profile 已启用。
+Codex App、ChatGPT 登录、Cloud、Remote Control 和历史记录保持不变。
 
 重新打开终端，然后输入：
-  codex
-EOF
-}
-
-print_global_summary() {
-  cat <<'EOF'
-
-方式 2 已启用：默认 Codex 配置将使用 New API。
-Codex App、ChatGPT 登录、Cloud 和 Remote Control 将无法使用该默认配置。
-如需恢复，请重新运行脚本并选择“恢复官方默认”。
+  codex-newapi
 EOF
 }
 
@@ -558,7 +492,7 @@ credential_exists() {
        secret-tool lookup service "$KEY_SERVICE" account "$USER" >/dev/null 2>&1; then
     return 0
   else
-    [ -s "$TARGET_HOME/credentials/newapi.key" ]
+    [ -s "$MANAGER_HOME/credentials/newapi.key" ]
   fi
 }
 
@@ -572,30 +506,23 @@ show_status() {
   fi
 
   case "$mode" in
-    cli) printf '\n当前模式：方式 1，仅接管终端 Codex CLI\n' ;;
-    global) printf '\n当前模式：方式 2，接管默认 Codex 配置\n' ;;
+    profile) printf '\n当前模式：New API profile（共用官方历史）\n' ;;
+    global) printf '\n当前模式：旧版全局配置，请运行 install 安全迁移\n' ;;
+    legacy-cli|cli) printf '\n当前模式：旧版隔离配置，请运行 install 共用历史\n' ;;
     *) printf '\n当前模式：官方默认\n' ;;
   esac
   printf 'New API 密钥：%s\n' "$credential"
 }
 
-install_cli_mode() {
+install_profile_mode() {
   if [ -f "$GLOBAL_ORIGINAL_STATE" ]; then
     restore_global_config
   fi
   configure_credential 0
-  write_config
+  write_profile_config
   write_shell_wrapper
-  set_mode "cli"
+  set_mode "profile"
   print_cli_summary
-}
-
-install_global_mode() {
-  remove_shell_wrapper
-  configure_credential 0
-  write_global_config
-  set_mode "global"
-  print_global_summary
 }
 
 rotate_credential() {
@@ -611,8 +538,8 @@ delete_credential() {
        [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
       secret-tool clear service "$KEY_SERVICE" account "$USER" >/dev/null 2>&1 || true
     fi
-    if [ -f "$TARGET_HOME/credentials/newapi.key" ]; then
-      rm -f "$TARGET_HOME/credentials/newapi.key"
+    if [ -f "$MANAGER_HOME/credentials/newapi.key" ]; then
+      rm -f "$MANAGER_HOME/credentials/newapi.key"
     fi
   fi
 }
@@ -621,13 +548,14 @@ restore_default() {
   local delete_key="${1:-0}"
   remove_shell_wrapper
   restore_global_config
+  restore_profile_config
 
   if [ "$delete_key" -eq 1 ]; then
     delete_credential
   fi
 
-  if [ -d "$TARGET_HOME" ]; then
-    mv "$TARGET_HOME" "${TARGET_HOME}.removed.$(timestamp)"
+  if [ -d "$LEGACY_HOME" ]; then
+    mv "$LEGACY_HOME" "${LEGACY_HOME}.removed.$(timestamp)"
   fi
   rm -f "$MODE_FILE"
 
@@ -648,15 +576,6 @@ confirm() {
   esac
 }
 
-confirm_global_mode() {
-  local answer=""
-  printf '\n警告：方式 2 会修改默认 ~/.codex/config.toml。\n'
-  printf 'Codex App、ChatGPT 登录、Cloud 和 Remote Control 将无法使用，直到恢复官方默认。\n'
-  printf '如已理解，请输入 GLOBAL 继续：'
-  IFS= read -r answer <&3
-  [ "$answer" = "GLOBAL" ]
-}
-
 pause_menu() {
   printf '\n按回车返回菜单...'
   IFS= read -r _pause <&3
@@ -670,15 +589,12 @@ interactive_menu() {
 
 Codex New API 管理
 
-  1. 仅接管终端 Codex CLI（推荐）
-     Codex App、ChatGPT 登录、Cloud 和 Remote Control 保持不变
+  1. 配置 New API profile（推荐）
+     共用 Codex 历史，官方登录和桌面端保持不变
 
-  2. 高级：接管默认 Codex 配置
-     会停用依赖官方登录的 Codex App、Cloud 和 Remote Control
-
-  3. 更换 New API 密钥
-  4. 查看当前状态
-  5. 移除 New API 配置，恢复官方默认
+  2. 更换 New API 密钥
+  3. 查看当前状态
+  4. 移除 New API 配置，恢复官方默认
   0. 退出
 EOF
     printf '\n请选择：'
@@ -687,26 +603,18 @@ EOF
 
     case "$choice" in
       1)
-        install_cli_mode
+        install_profile_mode
         pause_menu
         ;;
       2)
-        if confirm_global_mode; then
-          install_global_mode
-        else
-          printf '\n已取消。\n'
-        fi
-        pause_menu
-        ;;
-      3)
         rotate_credential
         pause_menu
         ;;
-      4)
+      3)
         show_status
         pause_menu
         ;;
-      5)
+      4)
         if confirm "恢复官方默认？"; then
           local delete_key=0
           if confirm "同时删除已保存的 New API 密钥？"; then
@@ -723,7 +631,7 @@ EOF
         return
         ;;
       *)
-        printf '\n请输入 0–5。\n'
+        printf '\n请输入 0–4。\n'
         ;;
     esac
   done
@@ -748,7 +656,7 @@ Codex binary:   $CODEX_BIN
 Base URL:       $BASE_URL
 Model:          $MODEL
 Reasoning:      $REASONING
-Target home:    $TARGET_HOME
+Profile config: $PROFILE_CONFIG
 Shell startup:  $SHELL_RC
 EOF
   exit 0
@@ -760,14 +668,11 @@ case "$ACTION" in
     ;;
   install)
     print_install_expectations
-    install_cli_mode
+    install_profile_mode
     ;;
   global)
-    if confirm_global_mode; then
-      install_global_mode
-    else
-      printf '\n已取消。\n'
-    fi
+    warn "旧版 global 模式已停用，正在迁移到共用历史的 New API profile"
+    install_profile_mode
     ;;
   rotate-key)
     rotate_credential

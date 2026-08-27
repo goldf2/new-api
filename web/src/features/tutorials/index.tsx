@@ -341,11 +341,11 @@ export function Tutorials() {
                           title={t('Keep the official desktop login')}
                         >
                           {t(
-                            'Use a dedicated CLI profile and leave auth.json unchanged. Codex Desktop can continue using the official account login.'
+                            'Use ~/.codex/newapi.config.toml as a named profile. It shares the normal conversation store while leaving auth.json and the official desktop login unchanged.'
                           )}
                         </Notice>
                         <CodeExample
-                          title='~/.codex/config.toml'
+                          title='~/.codex/newapi.config.toml'
                           value={codexConfig}
                         />
                         <div className='grid gap-3 md:grid-cols-2'>

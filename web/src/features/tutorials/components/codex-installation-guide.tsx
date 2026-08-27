@@ -193,15 +193,15 @@ function PlatformGuide(props: {
             <p className='text-sm font-medium'>{t('What happens next')}</p>
             <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
               {t(
-                'The script asks which mode to use and then requests your New API key. Key input is hidden. Option 1 is recommended. Option 2 changes the shared default configuration and disables Codex App, Cloud and Remote Control until you restore the official default.'
+                'The script stores your New API key securely, creates a named profile in the existing Codex home, and leaves the official login and conversation history unchanged.'
               )}
             </p>
           </div>
         </div>
 
         <InstallCommand
-          label={t('5. Reopen the terminal and start Codex')}
-          command='codex'
+          label={t('5. Reopen the terminal and start Codex with New API')}
+          command='codex-newapi'
         />
       </div>
     </div>
@@ -250,7 +250,7 @@ function CodexGuideFooter() {
           </p>
           <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
             {t(
-              'Do not delete the .codex folder or replace auth.json. The next setup step can use an isolated CLI configuration and keep the official desktop login and Remote Control unchanged.'
+              'The setup adds newapi.config.toml beside your existing config and never replaces auth.json. Official desktop login, Remote Control, and local conversation history stay available.'
             )}
           </p>
         </div>
