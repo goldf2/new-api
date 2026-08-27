@@ -69,7 +69,11 @@ describe('Codex installation guide', () => {
     )
     expect(
       screen.getByRole('button', { name: 'macOS / Linux' })
-    ).toHaveAttribute('aria-expanded', 'false')
+    ).toHaveAttribute('aria-expanded', 'true')
+
+    const codexButtons = screen.getAllByRole('button', { name: 'Codex' })
+    expect(codexButtons[0]).toHaveAttribute('aria-pressed', 'false')
+    expect(codexButtons[1]).toHaveAttribute('aria-pressed', 'true')
 
     expect(
       screen.getByText(
@@ -100,9 +104,10 @@ describe('Codex installation guide', () => {
     ).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Windows' }))
-    const geminiButton = await screen.findByRole('button', {
+    const geminiButtons = await screen.findAllByRole('button', {
       name: 'Gemini CLI',
     })
+    const geminiButton = geminiButtons[1]
     await user.click(geminiButton)
 
     expect(geminiButton).toHaveAttribute('aria-pressed', 'true')
@@ -121,6 +126,24 @@ describe('Codex installation guide', () => {
       screen.queryByRole('button', { name: 'Claude Code' })
     ).not.toBeInTheDocument()
     expect(screen.getByText('UNIX_SETUP_COMMAND')).toBeInTheDocument()
+  })
+
+  test('expands and collapses operating systems independently', async () => {
+    const user = userEvent.setup()
+    render(<CodexInstallationGuide {...guideProps} />)
+
+    const unixButton = screen.getByRole('button', { name: 'macOS / Linux' })
+    const windowsButton = screen.getByRole('button', { name: 'Windows' })
+
+    await user.click(windowsButton)
+
+    expect(unixButton).toHaveAttribute('aria-expanded', 'true')
+    expect(windowsButton).toHaveAttribute('aria-expanded', 'true')
+
+    await user.click(unixButton)
+
+    expect(unixButton).toHaveAttribute('aria-expanded', 'false')
+    expect(windowsButton).toHaveAttribute('aria-expanded', 'true')
   })
 
   test('links to the official CLI and desktop installation documentation', () => {

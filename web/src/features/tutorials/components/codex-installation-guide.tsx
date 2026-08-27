@@ -61,7 +61,7 @@ const WINDOWS_DESKTOP_GUIDE_URL =
 type ClientId = 'claude' | 'codex' | 'gemini'
 
 function ClientChoices(props: {
-  selectedClient: ClientId
+  selectedClient: ClientId | null
   onSelect: (client: ClientId) => void
 }) {
   const { t } = useTranslation()
@@ -418,9 +418,8 @@ export function CodexInstallationGuide(props: {
 }) {
   const { t } = useTranslation()
   const [platform, setPlatform] = useState<'unix' | 'windows'>('unix')
-  const [expandedPlatform, setExpandedPlatform] = useState<
-    'unix' | 'windows' | null
-  >('unix')
+  const [unixExpanded, setUnixExpanded] = useState(true)
+  const [windowsExpanded, setWindowsExpanded] = useState(false)
   const [client, setClient] = useState<ClientId>('codex')
   const platformLabel = platform === 'unix' ? 'macOS / Linux' : 'Windows'
 
@@ -450,15 +449,11 @@ export function CodexInstallationGuide(props: {
 
             <div className='grid gap-1'>
               <Collapsible
-                open={expandedPlatform === 'unix'}
+                open={unixExpanded}
                 onOpenChange={(open) => {
+                  setUnixExpanded(open)
                   if (open) {
                     setPlatform('unix')
-                    setExpandedPlatform('unix')
-                  } else {
-                    setExpandedPlatform((current) =>
-                      current === 'unix' ? null : current
-                    )
                   }
                 }}
                 className='group/collapsible'
@@ -482,7 +477,7 @@ export function CodexInstallationGuide(props: {
                 </CollapsibleTrigger>
                 <CollapsibleContent className='mt-1 ml-4 border-l pl-3'>
                   <ClientChoices
-                    selectedClient={client}
+                    selectedClient={platform === 'unix' ? client : null}
                     onSelect={(nextClient) => {
                       setPlatform('unix')
                       setClient(nextClient)
@@ -492,15 +487,11 @@ export function CodexInstallationGuide(props: {
               </Collapsible>
 
               <Collapsible
-                open={expandedPlatform === 'windows'}
+                open={windowsExpanded}
                 onOpenChange={(open) => {
+                  setWindowsExpanded(open)
                   if (open) {
                     setPlatform('windows')
-                    setExpandedPlatform('windows')
-                  } else {
-                    setExpandedPlatform((current) =>
-                      current === 'windows' ? null : current
-                    )
                   }
                 }}
                 className='group/collapsible'
@@ -524,7 +515,7 @@ export function CodexInstallationGuide(props: {
                 </CollapsibleTrigger>
                 <CollapsibleContent className='mt-1 ml-4 border-l pl-3'>
                   <ClientChoices
-                    selectedClient={client}
+                    selectedClient={platform === 'windows' ? client : null}
                     onSelect={(nextClient) => {
                       setPlatform('windows')
                       setClient(nextClient)
