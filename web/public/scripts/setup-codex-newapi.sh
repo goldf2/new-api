@@ -490,8 +490,6 @@ write_desktop_config() {
 model = "$MODEL"
 model_provider = "newapi"
 model_reasoning_effort = "$REASONING"
-forced_login_method = "api"
-cli_auth_credentials_store = "file"
 
 EOF
 
@@ -520,55 +518,20 @@ EOF
 name = "New API"
 base_url = "$BASE_URL"
 wire_api = "responses"
-requires_openai_auth = true
 request_max_retries = 4
 stream_max_retries = 10
 stream_idle_timeout_ms = 300000
+
+[model_providers.newapi.auth]
+command = "$AUTH_COMMAND"
+args = $AUTH_ARGS
+timeout_ms = 5000
+refresh_interval_ms = 0
 EOF
 
   chmod 600 "$tmp"
   mv "$tmp" "$GLOBAL_CONFIG"
   log "Codex 桌面版和默认命令已切换到 New API"
-}
-
-read_credential() {
-  case "$AUTH_KIND" in
-    macos-keychain)
-      /usr/bin/security find-generic-password -a "$USER" -s "$KEY_SERVICE" -w
-      ;;
-    linux-secret-service)
-      "$AUTH_COMMAND" lookup service "$KEY_SERVICE" account "$USER"
-      ;;
-    mode-600-file)
-      "$AUTH_COMMAND"
-      ;;
-    *)
-      die "无法识别 New API 密钥存储方式"
-      ;;
-  esac
-}
-
-install_desktop_auth() {
-  prepare_auth_backup
-  mkdir -p "$GLOBAL_HOME"
-  chmod 700 "$GLOBAL_HOME"
-
-  local api_key=""
-  api_key="$(read_credential)"
-  [ -n "$api_key" ] || die "未能读取 New API 密钥"
-
-  # Use the normal shared Codex home so the desktop app sees this API login.
-  if ! printf '%s\n' "$api_key" |
-       CODEX_HOME="$GLOBAL_HOME" "$CODEX_BIN" \
-         -c 'cli_auth_credentials_store="file"' login --with-api-key; then
-    unset api_key
-    die "Codex CLI 未能创建桌面版 API 登录状态"
-  fi
-  unset api_key
-
-  [ -f "$AUTH_CONFIG" ] || die "Codex CLI 未生成 auth.json，桌面版登录配置未完成"
-  chmod 600 "$AUTH_CONFIG"
-  log "Codex 桌面版 API 登录状态已创建"
 }
 
 remove_shell_wrapper() {
@@ -703,10 +666,16 @@ install_profile_mode() {
 }
 
 install_desktop_mode() {
+  # v0.0.23 replaced auth.json with a CLI API login. Restore the original
+  # account state before switching back to provider-managed authentication.
+  if [ -f "$AUTH_ORIGINAL_STATE" ]; then
+    restore_auth_config
+  fi
   configure_credential 0
   write_profile_config
   write_shell_wrapper
-  if ! (write_desktop_config && install_desktop_auth); then
+  prepare_auth_backup
+  if ! write_desktop_config; then
     restore_global_config
     restore_auth_config
     set_mode "profile"
@@ -717,8 +686,8 @@ install_desktop_mode() {
   cat <<'EOF'
 
 Codex 桌面版和命令行已切换到 New API。
-原登录状态已备份，可从菜单恢复。
-本地历史记录保持在原 Codex 目录中。
+原 config.toml 和 auth.json 已备份，可从菜单恢复。
+本地历史记录始终保留在默认 .codex 目录中，未搬移。
 请完全退出并重新打开 Codex 桌面版。
 Cloud 或 Remote Control 需要官方服务时，请重新运行脚本并选择方式 1。
 EOF
@@ -726,9 +695,6 @@ EOF
 
 rotate_credential() {
   configure_credential 1
-  if [ "$(get_mode)" = "desktop" ]; then
-    install_desktop_auth
-  fi
   printf '\nNew API 密钥已更换。\n'
 }
 
@@ -757,9 +723,6 @@ restore_default() {
     delete_credential
   fi
 
-  if [ -d "$LEGACY_HOME" ]; then
-    mv "$LEGACY_HOME" "${LEGACY_HOME}.removed.$(timestamp)"
-  fi
   rm -f "$MODE_FILE"
 
   cat <<'EOF'
@@ -796,7 +759,7 @@ Codex New API 管理
      codex-newapi 使用 New API，桌面版保持官方
 
   2. 桌面版和命令行都使用 New API
-     共用现有历史；自动备份原登录；需要完全重启桌面版
+     使用默认 .codex；原位保留历史；自动备份官方配置
 
   3. 更换 New API 密钥
   4. 查看当前状态

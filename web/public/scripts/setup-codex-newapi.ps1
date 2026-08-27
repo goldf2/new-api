@@ -216,34 +216,6 @@ function Get-ProviderConfig {
         (Get-ProviderTablesConfig).TrimStart()
 }
 
-function Get-DesktopTopLevelConfig {
-    $tomlModel = ConvertTo-TomlString $Model
-    $tomlReasoning = ConvertTo-TomlString $Reasoning
-
-    @"
-model = "$tomlModel"
-model_provider = "newapi"
-model_reasoning_effort = "$tomlReasoning"
-forced_login_method = "api"
-cli_auth_credentials_store = "file"
-"@
-}
-
-function Get-DesktopProviderTablesConfig {
-    $tomlBaseUrl = ConvertTo-TomlString $Script:BaseUrl
-
-    @"
-[model_providers.newapi]
-name = "New API"
-base_url = "$tomlBaseUrl"
-wire_api = "responses"
-requires_openai_auth = true
-request_max_retries = 4
-stream_max_retries = 10
-stream_idle_timeout_ms = 300000
-"@
-}
-
 function Prepare-ProfileBackup {
     Ensure-Directory $Script:ManagerHome
     if (Test-Path -LiteralPath $Script:ProfileOriginalState -PathType Leaf) {
@@ -446,8 +418,8 @@ function Write-DesktopConfig {
         throw '无法识别原配置状态，已停止以避免误操作。'
     }
 
-    $topLevelConfig = (Get-DesktopTopLevelConfig).TrimEnd()
-    $providerTables = (Get-DesktopProviderTablesConfig).Trim()
+    $topLevelConfig = (Get-TopLevelConfig).TrimEnd()
+    $providerTables = (Get-ProviderTablesConfig).Trim()
     if ($preserved.Count -gt 0) {
         $content = $topLevelConfig + [Environment]::NewLine + [Environment]::NewLine +
             ($preserved -join [Environment]::NewLine).Trim() + [Environment]::NewLine +
@@ -459,36 +431,6 @@ function Write-DesktopConfig {
     }
     Write-Utf8NoBom -Path $Script:GlobalConfig -Content $content
     Write-Host 'Codex 桌面版和默认命令已切换到 New API。'
-}
-
-function Install-DesktopAuth {
-    Prepare-AuthBackup
-    Ensure-Directory $Script:GlobalHome
-
-    $codexPath = Get-RealCodexPath
-    $previousCodexHome = $env:CODEX_HOME
-    try {
-        # Use the normal shared Codex home so the desktop app sees this API login.
-        $env:CODEX_HOME = $Script:GlobalHome
-        & $Script:PowerShellExe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $Script:CredentialHelper |
-            & $codexPath -c 'cli_auth_credentials_store="file"' login --with-api-key
-        if ($LASTEXITCODE -ne 0) {
-            throw 'Codex CLI 未能创建桌面版 API 登录状态。'
-        }
-    }
-    finally {
-        if ($null -eq $previousCodexHome) {
-            Remove-Item Env:CODEX_HOME -ErrorAction SilentlyContinue
-        }
-        else {
-            $env:CODEX_HOME = $previousCodexHome
-        }
-    }
-
-    if (-not (Test-Path -LiteralPath $Script:AuthConfig -PathType Leaf)) {
-        throw 'Codex CLI 未生成 auth.json，桌面版登录配置未完成。'
-    }
-    Write-Host 'Codex 桌面版 API 登录状态已创建。'
 }
 
 function Restore-GlobalConfig {
@@ -565,12 +507,17 @@ function Install-CliMode {
 }
 
 function Install-DesktopMode {
+    # v0.0.23 replaced auth.json with a CLI API login. Restore the original
+    # account state before switching back to provider-managed authentication.
+    if (Test-Path -LiteralPath $Script:AuthOriginalState -PathType Leaf) {
+        Restore-AuthConfig
+    }
     Save-Credential
     Write-ProfileConfig
     Install-CliWrapper
     try {
+        Prepare-AuthBackup
         Write-DesktopConfig
-        Install-DesktopAuth
     }
     catch {
         Restore-GlobalConfig
@@ -582,17 +529,14 @@ function Install-DesktopMode {
 
     Write-Host ''
     Write-Host 'Codex 桌面版和命令行已切换到 New API。'
-    Write-Host '原登录状态已备份，可从菜单恢复。'
-    Write-Host '本地历史记录保持在原 Codex 目录中。'
+    Write-Host '原 config.toml 和 auth.json 已备份，可从菜单恢复。'
+    Write-Host "本地历史记录始终保留在 $Script:GlobalHome，未搬移。"
     Write-Host '请完全退出并重新打开 Codex 桌面版。'
     Write-Host 'Cloud 或 Remote Control 需要官方服务时，请重新运行脚本并选择方式 1。'
 }
 
 function Rotate-Credential {
     Save-Credential -Force $true
-    if ((Get-Mode) -eq 'desktop') {
-        Install-DesktopAuth
-    }
     Write-Host ''
     Write-Host 'New API 密钥已更换。'
 }
@@ -611,6 +555,11 @@ function Show-Status {
     else {
         Write-Host 'New API 密钥：未保存'
     }
+    Write-Host "Codex 数据目录：$Script:GlobalHome（历史原位保留）"
+    if ((Test-Path -LiteralPath $Script:GlobalOriginalState -PathType Leaf) -and
+        (Test-Path -LiteralPath $Script:AuthOriginalState -PathType Leaf)) {
+        Write-Host '官方配置备份：已准备'
+    }
 }
 
 function Remove-Credential {
@@ -627,9 +576,6 @@ function Restore-Default {
     Restore-ProfileConfig
     if ($DeleteKey) {
         Remove-Credential
-    }
-    if (Test-Path -LiteralPath $Script:LegacyHome -PathType Container) {
-        Move-Item -LiteralPath $Script:LegacyHome -Destination "$($Script:LegacyHome).removed.$(Get-Timestamp)"
     }
     Remove-Item -LiteralPath $Script:ModeFile -Force -ErrorAction SilentlyContinue
 
@@ -658,7 +604,7 @@ function Show-InteractiveMenu {
         Write-Host '     codex-newapi 使用 New API，桌面版保持官方'
         Write-Host ''
         Write-Host '  2. 桌面版和命令行都使用 New API'
-        Write-Host '     共用现有历史；自动备份原登录；需要完全重启桌面版'
+        Write-Host '     使用默认 .codex；原位保留历史；自动备份官方配置'
         Write-Host ''
         Write-Host '  3. 更换 New API 密钥'
         Write-Host '  4. 查看当前状态'
