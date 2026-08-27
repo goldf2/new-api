@@ -338,10 +338,10 @@ export function Tutorials() {
                       <TabsContent value='codex' className='mt-4 space-y-3'>
                         <Notice
                           icon={ShieldCheck}
-                          title={t('Keep the official desktop login')}
+                          title={t('Choose where to use New API')}
                         >
                           {t(
-                            'Use ~/.codex/newapi.config.toml as a named profile. It shares the normal conversation store while leaving auth.json and the official desktop login unchanged.'
+                            'The installer offers CLI-only and Codex Desktop modes. Both share the normal conversation store; desktop mode changes the base provider and can be restored from the menu.'
                           )}
                         </Notice>
                         <CodeExample

@@ -31,7 +31,7 @@ export function buildUnixInstallerCommand(
   baseUrl: string
 ): string {
   const siteOrigin = getSiteOrigin(origin)
-  return `curl -fsSL "${siteOrigin}/scripts/setup-codex-newapi.sh" | bash -s -- install --base-url "${baseUrl}"`
+  return `curl -fsSL "${siteOrigin}/scripts/setup-codex-newapi.sh" | bash -s -- --base-url "${baseUrl}"`
 }
 
 export function buildWindowsInstallerCommand(
@@ -40,7 +40,7 @@ export function buildWindowsInstallerCommand(
 ): string {
   const siteOrigin = getSiteOrigin(origin)
 
-  return `$script = Invoke-RestMethod -Uri "${siteOrigin}/scripts/setup-codex-newapi.ps1"; & ([ScriptBlock]::Create($script)) -Action InstallCli -BaseUrl "${baseUrl}"`
+  return `$script = Invoke-RestMethod -Uri "${siteOrigin}/scripts/setup-codex-newapi.ps1"; & ([ScriptBlock]::Create($script)) -BaseUrl "${baseUrl}"`
 }
 
 export function buildResponsesCurl(baseUrl: string): string {

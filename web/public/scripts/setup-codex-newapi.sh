@@ -55,6 +55,7 @@ usage() {
 Usage:
   $SCRIPT_NAME
   $SCRIPT_NAME install [options]
+  $SCRIPT_NAME desktop [options]
   $SCRIPT_NAME rotate-key
   $SCRIPT_NAME status [options]
   $SCRIPT_NAME restore [options]
@@ -69,15 +70,15 @@ Options:
 
 Run without arguments to open the interactive menu.
 
-"install" adds ~/.codex/newapi.config.toml and a codex-newapi command. It keeps
-the official login, auth.json, shared history, Codex App, Cloud and Remote
-Control unchanged. The legacy "global" action now performs this safe install.
+"install" adds a CLI profile. "desktop" also switches the base config used by
+Codex Desktop to New API. Both keep auth.json and the shared history unchanged.
+Run without an action to choose interactively.
 EOF
 }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    menu|install|global|rotate-key|status|restore|uninstall)
+    menu|install|desktop|global|rotate-key|status|restore|uninstall)
       ACTION="$1"
       shift
       ;;
@@ -386,12 +387,12 @@ set_mode() {
 get_mode() {
   if [ -f "$MODE_FILE" ]; then
     sed -n '1p' "$MODE_FILE"
+  elif [ -f "$GLOBAL_ORIGINAL_STATE" ]; then
+    printf 'desktop\n'
   elif [ -f "$PROFILE_CONFIG" ]; then
     printf 'profile\n'
   elif [ -f "$SHELL_RC" ] && grep -qF "$MANAGED_BEGIN" "$SHELL_RC"; then
     printf 'legacy-cli\n'
-  elif [ -f "$GLOBAL_ORIGINAL_STATE" ]; then
-    printf 'global\n'
   else
     printf 'official\n'
   fi
@@ -416,6 +417,82 @@ restore_profile_config() {
   esac
 
   rm -f "$PROFILE_BACKUP" "$PROFILE_ORIGINAL_STATE"
+}
+
+prepare_global_backup() {
+  ensure_manager_home
+  if [ -f "$GLOBAL_ORIGINAL_STATE" ]; then
+    return
+  fi
+
+  if [ -f "$GLOBAL_CONFIG" ]; then
+    cp -p "$GLOBAL_CONFIG" "$GLOBAL_BACKUP"
+    chmod 600 "$GLOBAL_BACKUP"
+    printf 'present\n' > "$GLOBAL_ORIGINAL_STATE"
+  else
+    printf 'missing\n' > "$GLOBAL_ORIGINAL_STATE"
+  fi
+  chmod 600 "$GLOBAL_ORIGINAL_STATE"
+}
+
+write_desktop_config() {
+  prepare_global_backup
+  mkdir -p "$GLOBAL_HOME"
+  chmod 700 "$GLOBAL_HOME"
+
+  local source_config="/dev/null"
+  local tmp="$GLOBAL_CONFIG.codex-newapi.tmp.$$"
+  if [ "$(sed -n '1p' "$GLOBAL_ORIGINAL_STATE")" = "present" ]; then
+    [ -f "$GLOBAL_BACKUP" ] || die "找不到原配置备份，已停止以避免覆盖现有配置"
+    source_config="$GLOBAL_BACKUP"
+  fi
+
+  umask 077
+  cat > "$tmp" <<EOF
+# New API managed desktop defaults
+model = "$MODEL"
+model_provider = "newapi"
+model_reasoning_effort = "$REASONING"
+
+EOF
+
+  awk '
+    BEGIN { top_level = 1; skip_newapi = 0 }
+    /^[[:space:]]*\[/ {
+      top_level = 0
+      if ($0 ~ /^[[:space:]]*\[model_providers\.newapi([.][^]]+)?\][[:space:]]*$/) {
+        skip_newapi = 1
+        next
+      }
+      skip_newapi = 0
+    }
+    skip_newapi { next }
+    top_level && /^[[:space:]]*model[[:space:]]*=/ { next }
+    top_level && /^[[:space:]]*model_provider[[:space:]]*=/ { next }
+    top_level && /^[[:space:]]*model_reasoning_effort[[:space:]]*=/ { next }
+    { print }
+  ' "$source_config" >> "$tmp"
+
+  cat >> "$tmp" <<EOF
+
+[model_providers.newapi]
+name = "New API"
+base_url = "$BASE_URL"
+wire_api = "responses"
+request_max_retries = 4
+stream_max_retries = 10
+stream_idle_timeout_ms = 300000
+
+[model_providers.newapi.auth]
+command = "$AUTH_COMMAND"
+args = $AUTH_ARGS
+timeout_ms = 5000
+refresh_interval_ms = 0
+EOF
+
+  chmod 600 "$tmp"
+  mv "$tmp" "$GLOBAL_CONFIG"
+  log "Codex 桌面版和默认命令已切换到 New API"
 }
 
 remove_shell_wrapper() {
@@ -506,8 +583,9 @@ show_status() {
   fi
 
   case "$mode" in
-    profile) printf '\n当前模式：New API profile（共用官方历史）\n' ;;
-    global) printf '\n当前模式：旧版全局配置，请运行 install 安全迁移\n' ;;
+    profile) printf '\n当前模式：仅命令行使用 New API，桌面版保持官方\n' ;;
+    desktop) printf '\n当前模式：桌面版和命令行使用 New API（共用历史）\n' ;;
+    global) printf '\n当前模式：桌面版和命令行使用 New API（旧版配置，可直接重新安装）\n' ;;
     legacy-cli|cli) printf '\n当前模式：旧版隔离配置，请运行 install 共用历史\n' ;;
     *) printf '\n当前模式：官方默认\n' ;;
   esac
@@ -523,6 +601,22 @@ install_profile_mode() {
   write_shell_wrapper
   set_mode "profile"
   print_cli_summary
+}
+
+install_desktop_mode() {
+  configure_credential 0
+  write_profile_config
+  write_shell_wrapper
+  write_desktop_config
+  set_mode "desktop"
+
+  cat <<'EOF'
+
+Codex 桌面版和命令行已切换到 New API。
+官方 auth.json 和本地历史记录未改动。
+请完全退出并重新打开 Codex 桌面版。
+Cloud 或 Remote Control 需要官方服务时，请重新运行脚本并选择方式 1。
+EOF
 }
 
 rotate_credential() {
@@ -589,12 +683,15 @@ interactive_menu() {
 
 Codex New API 管理
 
-  1. 配置 New API profile（推荐）
-     共用 Codex 历史，官方登录和桌面端保持不变
+  1. 仅命令行使用 New API（推荐）
+     codex-newapi 使用 New API，桌面版保持官方
 
-  2. 更换 New API 密钥
-  3. 查看当前状态
-  4. 移除 New API 配置，恢复官方默认
+  2. 桌面版和命令行都使用 New API
+     共用现有历史；需要完全重启 Codex 桌面版
+
+  3. 更换 New API 密钥
+  4. 查看当前状态
+  5. 移除 New API 配置，恢复官方默认
   0. 退出
 EOF
     printf '\n请选择：'
@@ -607,14 +704,18 @@ EOF
         pause_menu
         ;;
       2)
-        rotate_credential
+        install_desktop_mode
         pause_menu
         ;;
       3)
-        show_status
+        rotate_credential
         pause_menu
         ;;
       4)
+        show_status
+        pause_menu
+        ;;
+      5)
         if confirm "恢复官方默认？"; then
           local delete_key=0
           if confirm "同时删除已保存的 New API 密钥？"; then
@@ -631,7 +732,7 @@ EOF
         return
         ;;
       *)
-        printf '\n请输入 0–4。\n'
+        printf '\n请输入 0–5。\n'
         ;;
     esac
   done
@@ -670,9 +771,13 @@ case "$ACTION" in
     print_install_expectations
     install_profile_mode
     ;;
+  desktop)
+    print_install_expectations
+    install_desktop_mode
+    ;;
   global)
-    warn "旧版 global 模式已停用，正在迁移到共用历史的 New API profile"
-    install_profile_mode
+    warn "global 已更名为 desktop；继续按桌面版 New API 模式配置"
+    install_desktop_mode
     ;;
   rotate-key)
     rotate_credential

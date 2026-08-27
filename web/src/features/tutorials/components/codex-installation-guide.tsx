@@ -193,15 +193,18 @@ function PlatformGuide(props: {
             <p className='text-sm font-medium'>{t('What happens next')}</p>
             <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
               {t(
-                'The script stores your New API key securely, creates a named profile in the existing Codex home, and leaves the official login and conversation history unchanged.'
+                'The script opens a menu: keep New API in the CLI only, or also switch Codex Desktop. Both choices use the existing Codex home and keep conversation history.'
               )}
             </p>
           </div>
         </div>
 
         <InstallCommand
-          label={t('5. Reopen the terminal and start Codex with New API')}
+          label={t('5. Start the selected Codex client')}
           command='codex-newapi'
+          description={t(
+            'CLI mode: run codex-newapi. Desktop mode: completely quit and reopen Codex Desktop.'
+          )}
         />
       </div>
     </div>
@@ -250,7 +253,7 @@ function CodexGuideFooter() {
           </p>
           <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
             {t(
-              'The setup adds newapi.config.toml beside your existing config and never replaces auth.json. Official desktop login, Remote Control, and local conversation history stay available.'
+              'The setup never replaces auth.json or changes the Codex home. CLI mode keeps the official desktop provider; desktop mode can be switched back from the same menu.'
             )}
           </p>
         </div>

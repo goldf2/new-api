@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('Menu', 'InstallCli', 'InstallGlobal', 'RotateKey', 'Status', 'Restore')]
+    [ValidateSet('Menu', 'InstallCli', 'InstallDesktop', 'InstallGlobal', 'RotateKey', 'Status', 'Restore')]
     [string]$Action = 'Menu',
 
     [string]$BaseUrl = 'https://ai.ebm001.com/v1',
@@ -301,14 +301,14 @@ function Get-Mode {
     if (Test-Path -LiteralPath $Script:ModeFile -PathType Leaf) {
         return [System.IO.File]::ReadAllText($Script:ModeFile).Trim()
     }
+    if (Test-Path -LiteralPath $Script:GlobalOriginalState -PathType Leaf) {
+        return 'desktop'
+    }
     if (Test-Path -LiteralPath $Script:ProfileConfig -PathType Leaf) {
         return 'profile'
     }
     if (Test-Path -LiteralPath $Script:CliWrapper -PathType Leaf) {
         return 'cli'
-    }
-    if (Test-Path -LiteralPath $Script:GlobalOriginalState -PathType Leaf) {
-        return 'global'
     }
     'official'
 }
@@ -338,6 +338,76 @@ function Restore-ProfileConfig {
 
     Remove-Item -LiteralPath $Script:ProfileBackup -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $Script:ProfileOriginalState -Force -ErrorAction SilentlyContinue
+}
+
+function Prepare-GlobalBackup {
+    Ensure-ManagerHome
+    if (Test-Path -LiteralPath $Script:GlobalOriginalState -PathType Leaf) {
+        return
+    }
+    if (Test-Path -LiteralPath $Script:GlobalConfig -PathType Leaf) {
+        Copy-Item -LiteralPath $Script:GlobalConfig -Destination $Script:GlobalBackup -Force
+        Write-Utf8NoBom -Path $Script:GlobalOriginalState -Content 'present'
+    }
+    else {
+        Write-Utf8NoBom -Path $Script:GlobalOriginalState -Content 'missing'
+    }
+}
+
+function Write-DesktopConfig {
+    Prepare-GlobalBackup
+    Ensure-Directory $Script:GlobalHome
+
+    $preserved = New-Object 'System.Collections.Generic.List[string]'
+    $state = [System.IO.File]::ReadAllText($Script:GlobalOriginalState).Trim()
+    if ($state -eq 'present') {
+        if (-not (Test-Path -LiteralPath $Script:GlobalBackup -PathType Leaf)) {
+            throw '找不到原配置备份，已停止以避免覆盖现有配置。'
+        }
+
+        $topLevel = $true
+        $skipNewApi = $false
+        foreach ($line in [System.IO.File]::ReadAllLines($Script:GlobalBackup)) {
+            if ($line -match '^\s*\[') {
+                $topLevel = $false
+                if ($line -match '^\s*\[model_providers\.newapi(\.[^]]+)?\]\s*$') {
+                    $skipNewApi = $true
+                    continue
+                }
+                $skipNewApi = $false
+            }
+            if ($skipNewApi) {
+                continue
+            }
+            if ($topLevel -and $line -match '^\s*model\s*=') {
+                continue
+            }
+            if ($topLevel -and $line -match '^\s*model_provider\s*=') {
+                continue
+            }
+            if ($topLevel -and $line -match '^\s*model_reasoning_effort\s*=') {
+                continue
+            }
+            [void]$preserved.Add($line)
+        }
+    }
+    elseif ($state -ne 'missing') {
+        throw '无法识别原配置状态，已停止以避免误操作。'
+    }
+
+    $topLevelConfig = (Get-TopLevelConfig).TrimEnd()
+    $providerTables = (Get-ProviderTablesConfig).Trim()
+    if ($preserved.Count -gt 0) {
+        $content = $topLevelConfig + [Environment]::NewLine + [Environment]::NewLine +
+            ($preserved -join [Environment]::NewLine).Trim() + [Environment]::NewLine +
+            [Environment]::NewLine + $providerTables + [Environment]::NewLine
+    }
+    else {
+        $content = $topLevelConfig + [Environment]::NewLine + [Environment]::NewLine +
+            $providerTables + [Environment]::NewLine
+    }
+    Write-Utf8NoBom -Path $Script:GlobalConfig -Content $content
+    Write-Host 'Codex 桌面版和默认命令已切换到 New API。'
 }
 
 function Restore-GlobalConfig {
@@ -384,6 +454,20 @@ function Install-CliMode {
     Write-Host '重新打开终端，然后输入：codex-newapi'
 }
 
+function Install-DesktopMode {
+    Save-Credential
+    Write-ProfileConfig
+    Install-CliWrapper
+    Write-DesktopConfig
+    Set-Mode 'desktop'
+
+    Write-Host ''
+    Write-Host 'Codex 桌面版和命令行已切换到 New API。'
+    Write-Host '官方 auth.json 和本地历史记录未改动。'
+    Write-Host '请完全退出并重新打开 Codex 桌面版。'
+    Write-Host 'Cloud 或 Remote Control 需要官方服务时，请重新运行脚本并选择方式 1。'
+}
+
 function Rotate-Credential {
     Save-Credential -Force $true
     Write-Host ''
@@ -392,8 +476,9 @@ function Rotate-Credential {
 
 function Show-Status {
     switch (Get-Mode) {
-        'profile' { Write-Host "`n当前模式：New API profile（共用官方历史）" }
-        'global' { Write-Host "`n当前模式：旧版全局配置，请运行 InstallCli 安全迁移" }
+        'profile' { Write-Host "`n当前模式：仅命令行使用 New API，桌面版保持官方" }
+        'desktop' { Write-Host "`n当前模式：桌面版和命令行使用 New API（共用历史）" }
+        'global' { Write-Host "`n当前模式：桌面版和命令行使用 New API（旧版配置，可直接重新安装）" }
         'cli' { Write-Host "`n当前模式：旧版隔离配置，请运行 InstallCli 共用历史" }
         default { Write-Host "`n当前模式：官方默认" }
     }
@@ -445,12 +530,15 @@ function Show-InteractiveMenu {
         Write-Host ''
         Write-Host 'Codex New API 管理'
         Write-Host ''
-        Write-Host '  1. 配置 New API profile（推荐）'
-        Write-Host '     共用 Codex 历史，官方登录和桌面端保持不变'
+        Write-Host '  1. 仅命令行使用 New API（推荐）'
+        Write-Host '     codex-newapi 使用 New API，桌面版保持官方'
         Write-Host ''
-        Write-Host '  2. 更换 New API 密钥'
-        Write-Host '  3. 查看当前状态'
-        Write-Host '  4. 移除 New API 配置，恢复官方默认'
+        Write-Host '  2. 桌面版和命令行都使用 New API'
+        Write-Host '     共用现有历史；需要完全重启 Codex 桌面版'
+        Write-Host ''
+        Write-Host '  3. 更换 New API 密钥'
+        Write-Host '  4. 查看当前状态'
+        Write-Host '  5. 移除 New API 配置，恢复官方默认'
         Write-Host '  0. 退出'
         Write-Host ''
         $choice = Read-Host '请选择'
@@ -461,14 +549,18 @@ function Show-InteractiveMenu {
                 Pause-Menu
             }
             '2' {
-                Rotate-Credential
+                Install-DesktopMode
                 Pause-Menu
             }
             '3' {
-                Show-Status
+                Rotate-Credential
                 Pause-Menu
             }
             '4' {
+                Show-Status
+                Pause-Menu
+            }
+            '5' {
                 if (Confirm-Action '恢复官方默认？') {
                     $deleteKey = Confirm-Action '同时删除已保存的 New API 密钥？'
                     Restore-Default -DeleteKey $deleteKey
@@ -483,7 +575,7 @@ function Show-InteractiveMenu {
                 return
             }
             default {
-                Write-Host "`n请输入 0-4。"
+                Write-Host "`n请输入 0-5。"
             }
         }
     }
@@ -504,9 +596,10 @@ try {
     switch ($Action) {
         'Menu' { Show-InteractiveMenu }
         'InstallCli' { Install-CliMode }
+        'InstallDesktop' { Install-DesktopMode }
         'InstallGlobal' {
-            Write-Warning '旧版 InstallGlobal 模式已停用，正在迁移到共用历史的 New API profile。'
-            Install-CliMode
+            Write-Warning 'InstallGlobal 已更名为 InstallDesktop；继续按桌面版 New API 模式配置。'
+            Install-DesktopMode
         }
         'RotateKey' { Rotate-Credential }
         'Status' { Show-Status }
