@@ -371,6 +371,14 @@ function Prepare-AuthBackup {
     }
 }
 
+function Suspend-AuthConfig {
+    Prepare-AuthBackup
+    if (Test-Path -LiteralPath $Script:AuthConfig -PathType Leaf) {
+        Remove-Item -LiteralPath $Script:AuthConfig -Force
+    }
+    Write-Host '官方 auth.json 已备份并暂时移出默认 Codex 目录。'
+}
+
 function Write-DesktopConfig {
     Prepare-GlobalBackup
     Ensure-Directory $Script:GlobalHome
@@ -516,7 +524,7 @@ function Install-DesktopMode {
     Write-ProfileConfig
     Install-CliWrapper
     try {
-        Prepare-AuthBackup
+        Suspend-AuthConfig
         Write-DesktopConfig
     }
     catch {
@@ -529,7 +537,7 @@ function Install-DesktopMode {
 
     Write-Host ''
     Write-Host 'Codex 桌面版和命令行已切换到 New API。'
-    Write-Host '原 config.toml 和 auth.json 已备份，可从菜单恢复。'
+    Write-Host '原 config.toml 已备份；auth.json 已备份并暂时移出，可从菜单恢复。'
     Write-Host "本地历史记录始终保留在 $Script:GlobalHome，未搬移。"
     Write-Host '请完全退出并重新打开 Codex 桌面版。'
     Write-Host 'Cloud 或 Remote Control 需要官方服务时，请重新运行脚本并选择方式 1。'
@@ -544,7 +552,12 @@ function Rotate-Credential {
 function Show-Status {
     switch (Get-Mode) {
         'profile' { Write-Host "`n当前模式：仅命令行使用 New API，桌面版保持官方" }
-        'desktop' { Write-Host "`n当前模式：桌面版和命令行使用 New API（共用历史）" }
+        'desktop' {
+            Write-Host "`n当前模式：桌面版和命令行使用 New API（共用历史）"
+            if (-not (Test-Path -LiteralPath $Script:AuthConfig -PathType Leaf)) {
+                Write-Host 'auth.json：已备份并暂时移出'
+            }
+        }
         'global' { Write-Host "`n当前模式：桌面版和命令行使用 New API（旧版配置，可直接重新安装）" }
         'cli' { Write-Host "`n当前模式：旧版隔离配置，请运行 InstallCli 共用历史" }
         default { Write-Host "`n当前模式：官方默认" }
@@ -604,7 +617,7 @@ function Show-InteractiveMenu {
         Write-Host '     codex-newapi 使用 New API，桌面版保持官方'
         Write-Host ''
         Write-Host '  2. 桌面版和命令行都使用 New API'
-        Write-Host '     使用默认 .codex；原位保留历史；自动备份官方配置'
+        Write-Host '     使用默认 .codex；原位保留历史；备份并暂时移出官方登录'
         Write-Host ''
         Write-Host '  3. 更换 New API 密钥'
         Write-Host '  4. 查看当前状态'

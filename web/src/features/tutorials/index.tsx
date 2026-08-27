@@ -341,7 +341,7 @@ export function Tutorials() {
                           title={t('Choose where to use New API')}
                         >
                           {t(
-                            'The installer offers CLI-only and Codex Desktop modes. Desktop mode uses the default .codex folder, backs up the original account setup, and keeps the existing conversation store in place.'
+                            'The installer offers CLI-only and Codex Desktop modes. Desktop mode uses the default .codex folder, backs up and temporarily removes the original auth.json while New API is active, and keeps the existing conversation store in place.'
                           )}
                         </Notice>
                         <CodeExample

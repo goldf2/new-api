@@ -38,7 +38,7 @@ describe('Codex installation guide', () => {
     expect(screen.getByText('UNIX_SETUP_COMMAND')).toBeInTheDocument()
     expect(screen.queryByText('WINDOWS_SETUP_COMMAND')).not.toBeInTheDocument()
     expect(
-      screen.getByText(/uses New API from the default Codex home/)
+      screen.getByText(/temporarily removes auth.json while New API is active/)
     ).toBeInTheDocument()
   })
 

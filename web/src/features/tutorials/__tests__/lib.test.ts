@@ -110,8 +110,14 @@ describe('tutorial configuration examples', () => {
     expect(unixScript).not.toContain('login --with-api-key')
     expect(windowsScript).toContain('Restore-AuthConfig')
     expect(unixScript).toContain('restore_auth_config')
-    expect(windowsScript).toContain('原 config.toml 和 auth.json 已备份')
-    expect(unixScript).toContain('原 config.toml 和 auth.json 已备份')
+    expect(windowsScript).toContain('function Suspend-AuthConfig')
+    expect(windowsScript).toContain(
+      'Remove-Item -LiteralPath $Script:AuthConfig -Force'
+    )
+    expect(unixScript).toContain('suspend_auth_config()')
+    expect(unixScript).toContain('rm -f "$AUTH_CONFIG"')
+    expect(windowsScript).toContain('auth.json 已备份并暂时移出')
+    expect(unixScript).toContain('auth.json 已备份并暂时移出')
     expect(windowsScript).toContain('历史记录始终保留在')
     expect(unixScript).toContain('历史记录始终保留在')
     expect(windowsScript).not.toContain('set "CODEX_HOME=')

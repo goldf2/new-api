@@ -253,7 +253,7 @@ function CodexGuideFooter() {
           </p>
           <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
             {t(
-              'CLI mode leaves the official login untouched. Desktop mode backs up config.toml and auth.json, uses New API from the default Codex home, and restores the original account setup without moving conversation history.'
+              'CLI mode leaves the official login untouched. Desktop mode backs up config.toml and auth.json, temporarily removes auth.json while New API is active, and restores the original account setup without moving conversation history.'
             )}
           </p>
         </div>
