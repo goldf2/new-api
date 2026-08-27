@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   Bot,
   CheckCircle2,
+  ChevronRight,
   Clock3,
   ExternalLink,
   KeyRound,
@@ -40,6 +41,12 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
+import { cn } from '@/lib/utils'
 
 const UNIX_INSTALL_COMMAND =
   'curl -fsSL https://chatgpt.com/codex/install.sh | sh'
@@ -47,6 +54,62 @@ const WINDOWS_INSTALL_COMMAND =
   'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"'
 const NPM_INSTALL_COMMAND = 'npm install -g @openai/codex'
 const VERIFY_COMMAND = 'codex --version'
+const DESKTOP_GUIDE_URL = 'https://developers.openai.com/codex/app'
+const WINDOWS_DESKTOP_GUIDE_URL =
+  'https://developers.openai.com/codex/app/windows'
+
+type ClientId = 'claude' | 'codex' | 'gemini'
+
+function ClientChoices(props: {
+  selectedClient: ClientId
+  onSelect: (client: ClientId) => void
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <div className='grid gap-1'>
+      <Button
+        type='button'
+        variant={props.selectedClient === 'claude' ? 'secondary' : 'ghost'}
+        className='w-full justify-start'
+        aria-label='Claude Code'
+        aria-pressed={props.selectedClient === 'claude'}
+        onClick={() => props.onSelect('claude')}
+      >
+        <Bot data-icon='inline-start' />
+        <span>{t('Claude Code installation')}</span>
+        <span className='ml-auto text-[10px] font-medium text-amber-600 dark:text-amber-400'>
+          {t('Coming soon')}
+        </span>
+      </Button>
+      <Button
+        type='button'
+        variant={props.selectedClient === 'codex' ? 'secondary' : 'ghost'}
+        className='w-full justify-start'
+        aria-label='Codex'
+        aria-pressed={props.selectedClient === 'codex'}
+        onClick={() => props.onSelect('codex')}
+      >
+        <TerminalSquare data-icon='inline-start' />
+        {t('Codex installation')}
+      </Button>
+      <Button
+        type='button'
+        variant={props.selectedClient === 'gemini' ? 'secondary' : 'ghost'}
+        className='w-full justify-start'
+        aria-label='Gemini CLI'
+        aria-pressed={props.selectedClient === 'gemini'}
+        onClick={() => props.onSelect('gemini')}
+      >
+        <Sparkles data-icon='inline-start' />
+        <span>{t('Gemini CLI installation')}</span>
+        <span className='ml-auto text-[10px] font-medium text-amber-600 dark:text-amber-400'>
+          {t('Coming soon')}
+        </span>
+      </Button>
+    </div>
+  )
+}
 
 function InstallCommand(props: {
   label: string
@@ -86,6 +149,7 @@ function PlatformGuide(props: {
   requirement: string
   installCommand: string
   installDescription: string
+  desktopGuideUrl: string
   setupCommand: string
   setupDescription: string
 }) {
@@ -108,9 +172,7 @@ function PlatformGuide(props: {
             {t('Official original installation')}
           </p>
           <p className='mt-1 text-xs leading-relaxed text-emerald-700/80 dark:text-emerald-300/80'>
-            {t(
-              'This guide uses only the official Codex installer and package.'
-            )}
+            {t('This guide uses only official Codex installation sources.')}
           </p>
         </div>
       </div>
@@ -134,7 +196,7 @@ function PlatformGuide(props: {
           <div className='bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-lg'>
             <TerminalSquare className='size-4' aria-hidden='true' />
           </div>
-          <p className='text-sm font-semibold'>{t('Installation steps')}</p>
+          <p className='text-sm font-semibold'>{t('Codex CLI installation')}</p>
         </div>
         <InstallCommand
           label={t('1. Install with the official installer')}
@@ -152,6 +214,63 @@ function PlatformGuide(props: {
           label={t('2. Reopen the terminal and verify the installation')}
           command={VERIFY_COMMAND}
         />
+      </div>
+
+      <div className='space-y-3 rounded-xl border p-4'>
+        <div className='flex items-center gap-3'>
+          <div className='bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-lg'>
+            <Laptop className='size-4' aria-hidden='true' />
+          </div>
+          <p className='text-sm font-semibold'>
+            {t('Codex Desktop installation')}
+          </p>
+        </div>
+
+        <p className='text-muted-foreground text-xs leading-relaxed'>
+          {t(
+            'The current official desktop app includes Codex. Download the version for your operating system from the official guide.'
+          )}
+        </p>
+
+        <Button
+          variant='outline'
+          size='sm'
+          render={
+            <a
+              href={props.desktopGuideUrl}
+              target='_blank'
+              rel='noopener noreferrer'
+            />
+          }
+        >
+          <ExternalLink data-icon='inline-start' />
+          {t('Open the official Codex Desktop installation guide')}
+        </Button>
+
+        <div className='grid gap-2'>
+          <div className='bg-background/70 flex gap-3 rounded-xl border p-3'>
+            <CheckCircle2
+              className='text-primary mt-0.5 size-4 shrink-0'
+              aria-hidden='true'
+            />
+            <p className='text-muted-foreground text-xs leading-relaxed'>
+              {t(
+                'Install and open the desktop app once before connecting New API.'
+              )}
+            </p>
+          </div>
+          <div className='bg-background/70 flex gap-3 rounded-xl border p-3'>
+            <ShieldCheck
+              className='text-primary mt-0.5 size-4 shrink-0'
+              aria-hidden='true'
+            />
+            <p className='text-muted-foreground text-xs leading-relaxed'>
+              {t(
+                'Before switching desktop mode, completely quit the app. Run the one-click setup below, choose desktop mode, then reopen it.'
+              )}
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className='space-y-3 rounded-xl border p-4'>
@@ -265,7 +384,7 @@ function CodexGuideFooter() {
           size='sm'
           render={
             <a
-              href='https://learn.chatgpt.com/docs/codex/cli'
+              href='https://developers.openai.com/codex/cli'
               target='_blank'
               rel='noopener noreferrer'
             />
@@ -279,14 +398,14 @@ function CodexGuideFooter() {
           size='sm'
           render={
             <a
-              href='https://learn.chatgpt.com/docs/app'
+              href={DESKTOP_GUIDE_URL}
               target='_blank'
               rel='noopener noreferrer'
             />
           }
         >
           <Laptop data-icon='inline-start' />
-          {t('ChatGPT desktop is optional')}
+          {t('Open the official Codex Desktop guide')}
         </Button>
       </div>
     </>
@@ -299,7 +418,10 @@ export function CodexInstallationGuide(props: {
 }) {
   const { t } = useTranslation()
   const [platform, setPlatform] = useState<'unix' | 'windows'>('unix')
-  const [client, setClient] = useState<'claude' | 'codex' | 'gemini'>('codex')
+  const [expandedPlatform, setExpandedPlatform] = useState<
+    'unix' | 'windows' | null
+  >('unix')
+  const [client, setClient] = useState<ClientId>('codex')
   const platformLabel = platform === 'unix' ? 'macOS / Linux' : 'Windows'
 
   return (
@@ -310,10 +432,10 @@ export function CodexInstallationGuide(props: {
             <TerminalSquare className='size-4' aria-hidden='true' />
           </div>
           <div>
-            <CardTitle>{t('CLI installation guides')}</CardTitle>
+            <CardTitle>{t('Codex installation guides')}</CardTitle>
             <CardDescription className='mt-1'>
               {t(
-                'Choose an operating system first, then choose an AI coding client. Only the selected guide is shown.'
+                'Expand an operating system, then choose an AI coding client to view its guide.'
               )}
             </CardDescription>
           </div>
@@ -321,92 +443,95 @@ export function CodexInstallationGuide(props: {
       </CardHeader>
       <CardContent className='space-y-4'>
         <div className='grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]'>
-          <div className='h-fit space-y-4 rounded-xl border p-3'>
+          <div className='h-fit rounded-xl border p-3'>
             <p className='text-muted-foreground px-2 pb-2 text-xs font-semibold tracking-wide'>
               {t('Installation & tutorials')}
             </p>
 
-            <div>
-              <p className='text-muted-foreground px-2 text-xs font-semibold'>
-                {t('1. Choose an operating system')}
-              </p>
-              <div
-                className='mt-2 grid gap-1'
-                role='group'
-                aria-label={t('1. Choose an operating system')}
+            <div className='grid gap-1'>
+              <Collapsible
+                open={expandedPlatform === 'unix'}
+                onOpenChange={(open) => {
+                  if (open) {
+                    setPlatform('unix')
+                    setExpandedPlatform('unix')
+                  } else {
+                    setExpandedPlatform((current) =>
+                      current === 'unix' ? null : current
+                    )
+                  }
+                }}
+                className='group/collapsible'
               >
-                <Button
-                  type='button'
-                  variant={platform === 'unix' ? 'secondary' : 'ghost'}
-                  className='w-full justify-start'
-                  aria-pressed={platform === 'unix'}
-                  onClick={() => setPlatform('unix')}
+                <CollapsibleTrigger
+                  className='group/collapsible-trigger'
+                  render={
+                    <button
+                      type='button'
+                      className={cn(
+                        'hover:bg-muted flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm font-medium transition-colors',
+                        platform === 'unix' &&
+                          'bg-secondary text-secondary-foreground'
+                      )}
+                    />
+                  }
                 >
-                  <Laptop data-icon='inline-start' />
-                  {t('macOS / Linux')}
-                </Button>
-                <Button
-                  type='button'
-                  variant={platform === 'windows' ? 'secondary' : 'ghost'}
-                  className='w-full justify-start'
-                  aria-pressed={platform === 'windows'}
-                  onClick={() => setPlatform('windows')}
-                >
-                  <MonitorCog data-icon='inline-start' />
-                  {t('Windows')}
-                </Button>
-              </div>
-            </div>
+                  <Laptop className='size-4 shrink-0' aria-hidden='true' />
+                  <span className='min-w-0 flex-1'>{t('macOS / Linux')}</span>
+                  <ChevronRight className='text-muted-foreground size-4 shrink-0 transition-transform duration-200 group-data-[panel-open]/collapsible-trigger:rotate-90' />
+                </CollapsibleTrigger>
+                <CollapsibleContent className='mt-1 ml-4 border-l pl-3'>
+                  <ClientChoices
+                    selectedClient={client}
+                    onSelect={(nextClient) => {
+                      setPlatform('unix')
+                      setClient(nextClient)
+                    }}
+                  />
+                </CollapsibleContent>
+              </Collapsible>
 
-            <div className='border-t pt-4'>
-              <p className='text-muted-foreground px-2 text-xs font-semibold'>
-                {t('2. Choose an AI coding client')}
-              </p>
-              <div
-                className='mt-2 grid gap-1'
-                role='group'
-                aria-label={t('2. Choose an AI coding client')}
+              <Collapsible
+                open={expandedPlatform === 'windows'}
+                onOpenChange={(open) => {
+                  if (open) {
+                    setPlatform('windows')
+                    setExpandedPlatform('windows')
+                  } else {
+                    setExpandedPlatform((current) =>
+                      current === 'windows' ? null : current
+                    )
+                  }
+                }}
+                className='group/collapsible'
               >
-                <Button
-                  type='button'
-                  variant={client === 'claude' ? 'secondary' : 'ghost'}
-                  className='w-full justify-start'
-                  aria-label='Claude Code'
-                  aria-pressed={client === 'claude'}
-                  onClick={() => setClient('claude')}
+                <CollapsibleTrigger
+                  className='group/collapsible-trigger'
+                  render={
+                    <button
+                      type='button'
+                      className={cn(
+                        'hover:bg-muted flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm font-medium transition-colors',
+                        platform === 'windows' &&
+                          'bg-secondary text-secondary-foreground'
+                      )}
+                    />
+                  }
                 >
-                  <Bot data-icon='inline-start' />
-                  <span>{t('Claude Code installation')}</span>
-                  <span className='ml-auto text-[10px] font-medium text-amber-600 dark:text-amber-400'>
-                    {t('Coming soon')}
-                  </span>
-                </Button>
-                <Button
-                  type='button'
-                  variant={client === 'codex' ? 'secondary' : 'ghost'}
-                  className='w-full justify-start'
-                  aria-label='Codex'
-                  aria-pressed={client === 'codex'}
-                  onClick={() => setClient('codex')}
-                >
-                  <TerminalSquare data-icon='inline-start' />
-                  {t('Codex installation')}
-                </Button>
-                <Button
-                  type='button'
-                  variant={client === 'gemini' ? 'secondary' : 'ghost'}
-                  className='w-full justify-start'
-                  aria-label='Gemini CLI'
-                  aria-pressed={client === 'gemini'}
-                  onClick={() => setClient('gemini')}
-                >
-                  <Sparkles data-icon='inline-start' />
-                  <span>{t('Gemini CLI installation')}</span>
-                  <span className='ml-auto text-[10px] font-medium text-amber-600 dark:text-amber-400'>
-                    {t('Coming soon')}
-                  </span>
-                </Button>
-              </div>
+                  <MonitorCog className='size-4 shrink-0' aria-hidden='true' />
+                  <span className='min-w-0 flex-1'>{t('Windows')}</span>
+                  <ChevronRight className='text-muted-foreground size-4 shrink-0 transition-transform duration-200 group-data-[panel-open]/collapsible-trigger:rotate-90' />
+                </CollapsibleTrigger>
+                <CollapsibleContent className='mt-1 ml-4 border-l pl-3'>
+                  <ClientChoices
+                    selectedClient={client}
+                    onSelect={(nextClient) => {
+                      setPlatform('windows')
+                      setClient(nextClient)
+                    }}
+                  />
+                </CollapsibleContent>
+              </Collapsible>
             </div>
           </div>
 
@@ -420,7 +545,7 @@ export function CodexInstallationGuide(props: {
                 <PlatformGuide
                   title={t('macOS / Linux Codex installation guide')}
                   subtitle={t(
-                    'Install the official Codex CLI on macOS or Linux.'
+                    'Install Codex CLI and the official desktop app on macOS or Linux.'
                   )}
                   requirement={t(
                     'A supported macOS or Linux system, a terminal, and internet access.'
@@ -429,6 +554,7 @@ export function CodexInstallationGuide(props: {
                   installDescription={t(
                     'Recommended. This installer does not require you to install Node.js first.'
                   )}
+                  desktopGuideUrl={DESKTOP_GUIDE_URL}
                   setupCommand={props.unixSetupCommand}
                   setupDescription={t(
                     'Use the copy button, paste the command into Terminal, and run it.'
@@ -442,7 +568,9 @@ export function CodexInstallationGuide(props: {
               <>
                 <PlatformGuide
                   title={t('Windows Codex installation guide')}
-                  subtitle={t('Install the official Codex CLI on Windows.')}
+                  subtitle={t(
+                    'Install Codex CLI and the official desktop app on Windows.'
+                  )}
                   requirement={t(
                     'Windows with PowerShell and internet access. Use a local PowerShell window when possible.'
                   )}
@@ -450,6 +578,7 @@ export function CodexInstallationGuide(props: {
                   installDescription={t(
                     'Recommended. Run this command in PowerShell and reopen PowerShell after it finishes.'
                   )}
+                  desktopGuideUrl={WINDOWS_DESKTOP_GUIDE_URL}
                   setupCommand={props.windowsSetupCommand}
                   setupDescription={t(
                     'Use the copy button. If you paste through remote desktop, verify that the URL remains plain text and was not converted into a Markdown link.'

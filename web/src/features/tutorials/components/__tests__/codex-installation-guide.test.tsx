@@ -31,16 +31,15 @@ describe('Codex installation guide', () => {
   test('shows the official macOS and Linux installer by default', () => {
     render(<CodexInstallationGuide {...guideProps} />)
 
-    const platformStep = screen.getByText('1. Choose an operating system')
-    const clientStep = screen.getByText('2. Choose an AI coding client')
-
-    expect(
-      platformStep.compareDocumentPosition(clientStep) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy()
+    expect(screen.queryByText(/1\. Choose/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/2\. Choose/)).not.toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'macOS / Linux' })
-    ).toHaveAttribute('aria-pressed', 'true')
+    ).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: 'Windows' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    )
     expect(screen.getByRole('button', { name: 'Codex' })).toHaveAttribute(
       'aria-pressed',
       'true'
@@ -49,6 +48,8 @@ describe('Codex installation guide', () => {
       screen.getByText('curl -fsSL https://chatgpt.com/codex/install.sh | sh')
     ).toBeInTheDocument()
     expect(screen.getByText('codex --version')).toBeInTheDocument()
+    expect(screen.getByText('Codex CLI installation')).toBeInTheDocument()
+    expect(screen.getByText('Codex Desktop installation')).toBeInTheDocument()
     expect(screen.getByText('UNIX_SETUP_COMMAND')).toBeInTheDocument()
     expect(screen.queryByText('WINDOWS_SETUP_COMMAND')).not.toBeInTheDocument()
     expect(
@@ -62,6 +63,14 @@ describe('Codex installation guide', () => {
 
     await user.click(screen.getByRole('button', { name: 'Windows' }))
 
+    expect(screen.getByRole('button', { name: 'Windows' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    )
+    expect(
+      screen.getByRole('button', { name: 'macOS / Linux' })
+    ).toHaveAttribute('aria-expanded', 'false')
+
     expect(
       screen.getByText(
         'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"'
@@ -69,6 +78,11 @@ describe('Codex installation guide', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('WINDOWS_SETUP_COMMAND')).toBeInTheDocument()
     expect(screen.queryByText('UNIX_SETUP_COMMAND')).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', {
+        name: 'Open the official Codex Desktop installation guide',
+      })
+    ).toHaveAttribute('href', 'https://developers.openai.com/codex/app/windows')
   })
 
   test('shows platform-specific placeholder pages without Codex content', async () => {
@@ -86,25 +100,62 @@ describe('Codex installation guide', () => {
     ).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Windows' }))
-    const geminiButton = screen.getByRole('button', { name: 'Gemini CLI' })
+    const geminiButton = await screen.findByRole('button', {
+      name: 'Gemini CLI',
+    })
     await user.click(geminiButton)
 
     expect(geminiButton).toHaveAttribute('aria-pressed', 'true')
     expect(screen.queryByText('WINDOWS_SETUP_COMMAND')).not.toBeInTheDocument()
   })
 
-  test('links only to official OpenAI installation documentation', () => {
+  test('collapses a platform without clearing the selected guide', async () => {
+    const user = userEvent.setup()
     render(<CodexInstallationGuide {...guideProps} />)
 
-    const guideButton = screen.getByRole('button', {
+    const unixButton = screen.getByRole('button', { name: 'macOS / Linux' })
+    await user.click(unixButton)
+
+    expect(unixButton).toHaveAttribute('aria-expanded', 'false')
+    expect(
+      screen.queryByRole('button', { name: 'Claude Code' })
+    ).not.toBeInTheDocument()
+    expect(screen.getByText('UNIX_SETUP_COMMAND')).toBeInTheDocument()
+  })
+
+  test('links to the official CLI and desktop installation documentation', () => {
+    render(<CodexInstallationGuide {...guideProps} />)
+
+    const cliGuideButton = screen.getByRole('button', {
       name: 'Open the official Codex guide',
     })
+    const desktopInstallButton = screen.getByRole('button', {
+      name: 'Open the official Codex Desktop installation guide',
+    })
+    const desktopGuideButton = screen.getByRole('button', {
+      name: 'Open the official Codex Desktop guide',
+    })
 
-    expect(guideButton).toHaveAttribute(
+    expect(cliGuideButton).toHaveAttribute(
       'href',
-      'https://learn.chatgpt.com/docs/codex/cli'
+      'https://developers.openai.com/codex/cli'
     )
-    expect(guideButton).toHaveAttribute('target', '_blank')
-    expect(guideButton).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(desktopInstallButton).toHaveAttribute(
+      'href',
+      'https://developers.openai.com/codex/app'
+    )
+    expect(desktopGuideButton).toHaveAttribute(
+      'href',
+      'https://developers.openai.com/codex/app'
+    )
+
+    for (const button of [
+      cliGuideButton,
+      desktopInstallButton,
+      desktopGuideButton,
+    ]) {
+      expect(button).toHaveAttribute('target', '_blank')
+      expect(button).toHaveAttribute('rel', 'noopener noreferrer')
+    }
   })
 })
