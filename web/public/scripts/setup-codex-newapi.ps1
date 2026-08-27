@@ -25,11 +25,14 @@ $Script:LegacyHome = Join-Path $env:USERPROFILE '.codex-na'
 $Script:ManagerHome = Join-Path $env:USERPROFILE '.codex-newapi-manager'
 $Script:GlobalHome = Join-Path $env:USERPROFILE '.codex'
 $Script:GlobalConfig = Join-Path $Script:GlobalHome 'config.toml'
+$Script:AuthConfig = Join-Path $Script:GlobalHome 'auth.json'
 $Script:ProfileConfig = Join-Path $Script:GlobalHome 'newapi.config.toml'
 $Script:ProfileBackup = Join-Path $Script:ManagerHome 'newapi.config.toml.before-newapi'
 $Script:ProfileOriginalState = Join-Path $Script:ManagerHome 'profile-original-state'
 $Script:GlobalBackup = Join-Path $Script:ManagerHome 'config.toml.before-newapi'
 $Script:GlobalOriginalState = Join-Path $Script:ManagerHome 'global-original-state'
+$Script:AuthBackup = Join-Path $Script:ManagerHome 'auth.json.before-newapi'
+$Script:AuthOriginalState = Join-Path $Script:ManagerHome 'auth-original-state'
 $Script:ModeFile = Join-Path $Script:ManagerHome 'mode'
 $Script:CredentialDir = Join-Path $Script:ManagerHome 'credentials'
 $Script:CredentialFile = Join-Path $Script:CredentialDir 'newapi-key.dpapi'
@@ -213,6 +216,34 @@ function Get-ProviderConfig {
         (Get-ProviderTablesConfig).TrimStart()
 }
 
+function Get-DesktopTopLevelConfig {
+    $tomlModel = ConvertTo-TomlString $Model
+    $tomlReasoning = ConvertTo-TomlString $Reasoning
+
+    @"
+model = "$tomlModel"
+model_provider = "newapi"
+model_reasoning_effort = "$tomlReasoning"
+forced_login_method = "api"
+cli_auth_credentials_store = "file"
+"@
+}
+
+function Get-DesktopProviderTablesConfig {
+    $tomlBaseUrl = ConvertTo-TomlString $Script:BaseUrl
+
+    @"
+[model_providers.newapi]
+name = "New API"
+base_url = "$tomlBaseUrl"
+wire_api = "responses"
+requires_openai_auth = true
+request_max_retries = 4
+stream_max_retries = 10
+stream_idle_timeout_ms = 300000
+"@
+}
+
 function Prepare-ProfileBackup {
     Ensure-Directory $Script:ManagerHome
     if (Test-Path -LiteralPath $Script:ProfileOriginalState -PathType Leaf) {
@@ -354,6 +385,20 @@ function Prepare-GlobalBackup {
     }
 }
 
+function Prepare-AuthBackup {
+    Ensure-ManagerHome
+    if (Test-Path -LiteralPath $Script:AuthOriginalState -PathType Leaf) {
+        return
+    }
+    if (Test-Path -LiteralPath $Script:AuthConfig -PathType Leaf) {
+        Copy-Item -LiteralPath $Script:AuthConfig -Destination $Script:AuthBackup -Force
+        Write-Utf8NoBom -Path $Script:AuthOriginalState -Content 'present'
+    }
+    else {
+        Write-Utf8NoBom -Path $Script:AuthOriginalState -Content 'missing'
+    }
+}
+
 function Write-DesktopConfig {
     Prepare-GlobalBackup
     Ensure-Directory $Script:GlobalHome
@@ -388,6 +433,12 @@ function Write-DesktopConfig {
             if ($topLevel -and $line -match '^\s*model_reasoning_effort\s*=') {
                 continue
             }
+            if ($topLevel -and $line -match '^\s*forced_login_method\s*=') {
+                continue
+            }
+            if ($topLevel -and $line -match '^\s*cli_auth_credentials_store\s*=') {
+                continue
+            }
             [void]$preserved.Add($line)
         }
     }
@@ -395,8 +446,8 @@ function Write-DesktopConfig {
         throw '无法识别原配置状态，已停止以避免误操作。'
     }
 
-    $topLevelConfig = (Get-TopLevelConfig).TrimEnd()
-    $providerTables = (Get-ProviderTablesConfig).Trim()
+    $topLevelConfig = (Get-DesktopTopLevelConfig).TrimEnd()
+    $providerTables = (Get-DesktopProviderTablesConfig).Trim()
     if ($preserved.Count -gt 0) {
         $content = $topLevelConfig + [Environment]::NewLine + [Environment]::NewLine +
             ($preserved -join [Environment]::NewLine).Trim() + [Environment]::NewLine +
@@ -408,6 +459,36 @@ function Write-DesktopConfig {
     }
     Write-Utf8NoBom -Path $Script:GlobalConfig -Content $content
     Write-Host 'Codex 桌面版和默认命令已切换到 New API。'
+}
+
+function Install-DesktopAuth {
+    Prepare-AuthBackup
+    Ensure-Directory $Script:GlobalHome
+
+    $codexPath = Get-RealCodexPath
+    $previousCodexHome = $env:CODEX_HOME
+    try {
+        # Use the normal shared Codex home so the desktop app sees this API login.
+        $env:CODEX_HOME = $Script:GlobalHome
+        & $Script:PowerShellExe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $Script:CredentialHelper |
+            & $codexPath -c 'cli_auth_credentials_store="file"' login --with-api-key
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Codex CLI 未能创建桌面版 API 登录状态。'
+        }
+    }
+    finally {
+        if ($null -eq $previousCodexHome) {
+            Remove-Item Env:CODEX_HOME -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:CODEX_HOME = $previousCodexHome
+        }
+    }
+
+    if (-not (Test-Path -LiteralPath $Script:AuthConfig -PathType Leaf)) {
+        throw 'Codex CLI 未生成 auth.json，桌面版登录配置未完成。'
+    }
+    Write-Host 'Codex 桌面版 API 登录状态已创建。'
 }
 
 function Restore-GlobalConfig {
@@ -438,9 +519,38 @@ function Restore-GlobalConfig {
     Remove-Item -LiteralPath $Script:GlobalOriginalState -Force -ErrorAction SilentlyContinue
 }
 
+function Restore-AuthConfig {
+    if (-not (Test-Path -LiteralPath $Script:AuthOriginalState -PathType Leaf)) {
+        return
+    }
+
+    $state = [System.IO.File]::ReadAllText($Script:AuthOriginalState).Trim()
+    switch ($state) {
+        'present' {
+            if (-not (Test-Path -LiteralPath $Script:AuthBackup -PathType Leaf)) {
+                throw '找不到原登录状态备份，无法安全恢复。'
+            }
+            Ensure-Directory $Script:GlobalHome
+            Copy-Item -LiteralPath $Script:AuthBackup -Destination $Script:AuthConfig -Force
+        }
+        'missing' {
+            Remove-Item -LiteralPath $Script:AuthConfig -Force -ErrorAction SilentlyContinue
+        }
+        default {
+            throw '无法识别原登录状态，已停止以避免误操作。'
+        }
+    }
+
+    Remove-Item -LiteralPath $Script:AuthBackup -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $Script:AuthOriginalState -Force -ErrorAction SilentlyContinue
+}
+
 function Install-CliMode {
     if (Test-Path -LiteralPath $Script:GlobalOriginalState -PathType Leaf) {
         Restore-GlobalConfig
+    }
+    if (Test-Path -LiteralPath $Script:AuthOriginalState -PathType Leaf) {
+        Restore-AuthConfig
     }
     Save-Credential
     Write-ProfileConfig
@@ -458,18 +568,31 @@ function Install-DesktopMode {
     Save-Credential
     Write-ProfileConfig
     Install-CliWrapper
-    Write-DesktopConfig
+    try {
+        Write-DesktopConfig
+        Install-DesktopAuth
+    }
+    catch {
+        Restore-GlobalConfig
+        Restore-AuthConfig
+        Set-Mode 'profile'
+        throw
+    }
     Set-Mode 'desktop'
 
     Write-Host ''
     Write-Host 'Codex 桌面版和命令行已切换到 New API。'
-    Write-Host '官方 auth.json 和本地历史记录未改动。'
+    Write-Host '原登录状态已备份，可从菜单恢复。'
+    Write-Host '本地历史记录保持在原 Codex 目录中。'
     Write-Host '请完全退出并重新打开 Codex 桌面版。'
     Write-Host 'Cloud 或 Remote Control 需要官方服务时，请重新运行脚本并选择方式 1。'
 }
 
 function Rotate-Credential {
     Save-Credential -Force $true
+    if ((Get-Mode) -eq 'desktop') {
+        Install-DesktopAuth
+    }
     Write-Host ''
     Write-Host 'New API 密钥已更换。'
 }
@@ -500,6 +623,7 @@ function Restore-Default {
 
     Remove-CliWrapper
     Restore-GlobalConfig
+    Restore-AuthConfig
     Restore-ProfileConfig
     if ($DeleteKey) {
         Remove-Credential
@@ -534,7 +658,7 @@ function Show-InteractiveMenu {
         Write-Host '     codex-newapi 使用 New API，桌面版保持官方'
         Write-Host ''
         Write-Host '  2. 桌面版和命令行都使用 New API'
-        Write-Host '     共用现有历史；需要完全重启 Codex 桌面版'
+        Write-Host '     共用现有历史；自动备份原登录；需要完全重启桌面版'
         Write-Host ''
         Write-Host '  3. 更换 New API 密钥'
         Write-Host '  4. 查看当前状态'

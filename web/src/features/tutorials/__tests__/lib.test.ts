@@ -76,7 +76,7 @@ describe('tutorial configuration examples', () => {
     expect(script.subarray(0, 3)).toEqual(Buffer.from('[Cm'))
   })
 
-  test('offers CLI and desktop modes on the shared history store', () => {
+  test('creates a restorable API login for desktop mode on the shared history store', () => {
     const windowsScript = readFileSync(
       'public/scripts/setup-codex-newapi.ps1',
       'utf8'
@@ -98,8 +98,20 @@ describe('tutorial configuration examples', () => {
     expect(unixScript).toContain('desktop)')
     expect(windowsScript).toContain("Set-Mode 'desktop'")
     expect(unixScript).toContain('set_mode "desktop"')
-    expect(windowsScript).toContain('官方 auth.json 和本地历史记录未改动')
-    expect(unixScript).toContain('官方 auth.json 和本地历史记录未改动')
+    expect(windowsScript).toContain('forced_login_method = "api"')
+    expect(unixScript).toContain('forced_login_method = "api"')
+    expect(windowsScript).toContain('cli_auth_credentials_store = "file"')
+    expect(unixScript).toContain('cli_auth_credentials_store = "file"')
+    expect(windowsScript).toContain('requires_openai_auth = true')
+    expect(unixScript).toContain('requires_openai_auth = true')
+    expect(windowsScript).toContain('$Script:AuthOriginalState')
+    expect(unixScript).toContain('AUTH_ORIGINAL_STATE=')
+    expect(windowsScript).toContain('login --with-api-key')
+    expect(unixScript).toContain('login --with-api-key')
+    expect(windowsScript).toContain('Restore-AuthConfig')
+    expect(unixScript).toContain('restore_auth_config')
+    expect(windowsScript).toContain('原登录状态已备份，可从菜单恢复')
+    expect(unixScript).toContain('原登录状态已备份，可从菜单恢复')
     expect(windowsScript).not.toContain('set "CODEX_HOME=')
     expect(unixScript).not.toContain('CODEX_HOME=$quoted_home')
     expect(windowsScript).not.toContain('请输入 GLOBAL 继续')

@@ -249,11 +249,11 @@ function CodexGuideFooter() {
         />
         <div>
           <p className='text-sm font-medium'>
-            {t('Keep your existing Codex login')}
+            {t('Protect your existing Codex login and history')}
           </p>
           <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
             {t(
-              'The setup never replaces auth.json or changes the Codex home. CLI mode keeps the official desktop provider; desktop mode can be switched back from the same menu.'
+              'CLI mode leaves the official login untouched. Desktop mode backs up auth.json, creates an API-key login in the same Codex home, and restores the original login from the menu without moving conversation history.'
             )}
           </p>
         </div>

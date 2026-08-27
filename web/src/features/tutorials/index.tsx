@@ -341,7 +341,7 @@ export function Tutorials() {
                           title={t('Choose where to use New API')}
                         >
                           {t(
-                            'The installer offers CLI-only and Codex Desktop modes. Both share the normal conversation store; desktop mode changes the base provider and can be restored from the menu.'
+                            'The installer offers CLI-only and Codex Desktop modes. Desktop mode backs up the original login, creates the API login the Windows app requires, and keeps the normal conversation store.'
                           )}
                         </Notice>
                         <CodeExample
