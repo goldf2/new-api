@@ -30,7 +30,7 @@ func RefreshAuth(c *gin.Context) {
 		writeAuthSessionError(c, err)
 		return
 	}
-	service.WriteRefreshCookie(c, bundle.RefreshToken)
+	service.WriteRefreshCookie(c, bundle.RefreshToken, service.RefreshCookiePersistent(c))
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

@@ -48,6 +48,7 @@ export async function login(payload: LoginPayload) {
     {
       username: payload.username,
       password: payload.password,
+      remember_me: payload.remember_me,
     },
     { skipAuthRefresh: true }
   )

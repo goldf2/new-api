@@ -13,7 +13,10 @@ import (
 	"github.com/google/uuid"
 )
 
-const RefreshCookieName = "new_api_refresh"
+const (
+	RefreshCookieName            = "new_api_refresh"
+	RefreshCookiePersistenceName = "new_api_refresh_persistent"
+)
 
 var (
 	ErrLoginSessionInvalid  = errors.New("login session is invalid")
@@ -289,40 +292,67 @@ func ListLoginSessions(userID int, currentSID string) ([]LoginSessionView, error
 	return views, nil
 }
 
-func WriteRefreshCookie(c *gin.Context, rawToken string) {
+func RefreshCookiePersistent(c *gin.Context) bool {
+	value, err := c.Cookie(RefreshCookiePersistenceName)
+	if err != nil {
+		// Sessions created before the persistence marker was introduced were
+		// persistent, so preserve their existing behavior during upgrades.
+		return true
+	}
+	return value != "0"
+}
+
+func WriteRefreshCookie(c *gin.Context, rawToken string, persistent bool) {
 	expiresAt := time.Now().Add(LoginSessionTTL)
 	if sid, _, ok := splitRefreshToken(rawToken); ok {
 		if session, err := model.GetUserSessionCached(sid); err == nil && session.ExpiresAt > time.Now().Unix() {
 			expiresAt = time.Unix(session.ExpiresAt, 0)
 		}
 	}
-	maxAge := int(time.Until(expiresAt) / time.Second)
-	if maxAge < 1 {
-		maxAge = 1
-	}
-	http.SetCookie(c.Writer, &http.Cookie{
+	refreshCookie := &http.Cookie{
 		Name:     RefreshCookieName,
 		Value:    rawToken,
 		Path:     "/api/user/auth",
-		MaxAge:   maxAge,
-		Expires:  expiresAt,
 		HttpOnly: true,
 		Secure:   common.SessionCookieSecure,
 		SameSite: http.SameSiteStrictMode,
-	})
+	}
+	persistenceCookie := &http.Cookie{
+		Name:     RefreshCookiePersistenceName,
+		Value:    "0",
+		Path:     "/api/user/auth",
+		HttpOnly: true,
+		Secure:   common.SessionCookieSecure,
+		SameSite: http.SameSiteStrictMode,
+	}
+	if persistent {
+		maxAge := int(time.Until(expiresAt) / time.Second)
+		if maxAge < 1 {
+			maxAge = 1
+		}
+		refreshCookie.MaxAge = maxAge
+		refreshCookie.Expires = expiresAt
+		persistenceCookie.Value = "1"
+		persistenceCookie.MaxAge = maxAge
+		persistenceCookie.Expires = expiresAt
+	}
+	http.SetCookie(c.Writer, refreshCookie)
+	http.SetCookie(c.Writer, persistenceCookie)
 }
 
 func ClearRefreshCookie(c *gin.Context) {
-	http.SetCookie(c.Writer, &http.Cookie{
-		Name:     RefreshCookieName,
-		Value:    "",
-		Path:     "/api/user/auth",
-		MaxAge:   -1,
-		Expires:  time.Unix(1, 0),
-		HttpOnly: true,
-		Secure:   common.SessionCookieSecure,
-		SameSite: http.SameSiteStrictMode,
-	})
+	for _, name := range []string{RefreshCookieName, RefreshCookiePersistenceName} {
+		http.SetCookie(c.Writer, &http.Cookie{
+			Name:     name,
+			Value:    "",
+			Path:     "/api/user/auth",
+			MaxAge:   -1,
+			Expires:  time.Unix(1, 0),
+			HttpOnly: true,
+			Secure:   common.SessionCookieSecure,
+			SameSite: http.SameSiteStrictMode,
+		})
+	}
 }
 
 func issueAuthBundle(session *model.UserSession, rawRefreshToken string, current bool) (*AuthBundle, error) {

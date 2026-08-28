@@ -2440,6 +2440,7 @@
     "Keep affinity when channel is disabled": "Giữ ưu tiên khi kênh bị tắt",
     "Keep enabled if you need to proxy requests for different upstream accounts.": "Giữ bật nếu bạn cần proxy yêu cầu cho các tài khoản upstream khác nhau.",
     "Keep enough balance before production traffic": "Giữ đủ số dư trước khi chạy lưu lượng production",
+    "Keep me signed in": "Duy trì đăng nhập",
     "Keep original value": "Giữ giá trị gốc",
     "Keep original value (skip if target exists)": "Giữ giá trị gốc (bỏ qua nếu đích đã tồn tại)",
     "Keep the platform ready": "Giữ nền tảng luôn sẵn sàng",

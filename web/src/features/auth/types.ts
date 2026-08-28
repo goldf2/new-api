@@ -25,6 +25,7 @@ import type { AuthBundle } from '@/stores/auth-store'
 export interface LoginPayload {
   username: string
   password: string
+  remember_me: boolean
   turnstile?: string
 }
 

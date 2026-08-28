@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +20,91 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
+
+func TestRefreshCookiePersistentPreservesLegacyDefault(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name       string
+		marker     *http.Cookie
+		persistent bool
+	}{
+		{name: "legacy session without marker", persistent: true},
+		{name: "persistent marker", marker: &http.Cookie{Name: RefreshCookiePersistenceName, Value: "1"}, persistent: true},
+		{name: "browser session marker", marker: &http.Cookie{Name: RefreshCookiePersistenceName, Value: "0"}, persistent: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			ctx.Request = httptest.NewRequest(http.MethodPost, "/api/user/auth/refresh", nil)
+			if test.marker != nil {
+				ctx.Request.AddCookie(test.marker)
+			}
+
+			assert.Equal(t, test.persistent, RefreshCookiePersistent(ctx))
+		})
+	}
+}
+
+func TestWriteRefreshCookieUsesSelectedPersistence(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	for _, persistent := range []bool{true, false} {
+		t.Run(fmt.Sprintf("persistent=%t", persistent), func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(recorder)
+
+			WriteRefreshCookie(ctx, "opaque-refresh-token", persistent)
+
+			cookies := make(map[string]*http.Cookie)
+			for _, cookie := range recorder.Result().Cookies() {
+				cookies[cookie.Name] = cookie
+			}
+			refreshCookie := cookies[RefreshCookieName]
+			markerCookie := cookies[RefreshCookiePersistenceName]
+			require.NotNil(t, refreshCookie)
+			require.NotNil(t, markerCookie)
+			assert.Equal(t, "/api/user/auth", refreshCookie.Path)
+			assert.True(t, refreshCookie.HttpOnly)
+			assert.Equal(t, "/api/user/auth", markerCookie.Path)
+			assert.True(t, markerCookie.HttpOnly)
+
+			if persistent {
+				assert.Positive(t, refreshCookie.MaxAge)
+				assert.Positive(t, markerCookie.MaxAge)
+				assert.Equal(t, "1", markerCookie.Value)
+				assert.True(t, refreshCookie.Expires.After(time.Now()))
+				assert.True(t, markerCookie.Expires.After(time.Now()))
+			} else {
+				assert.Zero(t, refreshCookie.MaxAge)
+				assert.Zero(t, markerCookie.MaxAge)
+				assert.Equal(t, "0", markerCookie.Value)
+				assert.True(t, refreshCookie.Expires.IsZero())
+				assert.True(t, markerCookie.Expires.IsZero())
+			}
+		})
+	}
+}
+
+func TestClearRefreshCookieClearsTokenAndPersistenceMarker(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+
+	ClearRefreshCookie(ctx)
+
+	cookies := make(map[string]*http.Cookie)
+	for _, cookie := range recorder.Result().Cookies() {
+		cookies[cookie.Name] = cookie
+	}
+	for _, name := range []string{RefreshCookieName, RefreshCookiePersistenceName} {
+		cookie := cookies[name]
+		require.NotNil(t, cookie)
+		assert.Negative(t, cookie.MaxAge)
+		assert.Equal(t, "/api/user/auth", cookie.Path)
+	}
+}
 
 func setupAuthSessionTestDB(t *testing.T) *model.User {
 	t.Helper()

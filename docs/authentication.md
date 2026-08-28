@@ -52,6 +52,8 @@
 }
 ```
 
+密码登录请求可携带可选布尔字段 `remember_me`。省略或设为 `true` 时，Refresh Cookie 会持久保存到登录 Session 的最长 30 天有效期；设为 `false` 时，Refresh Cookie 仅保留到当前浏览器会话结束。2FA 登录会沿用密码校验时的选择，后续 Refresh Token 轮换也会保持该 Cookie 策略。升级前已存在且没有持久化标记的 Refresh Cookie 按原行为继续视为持久登录。
+
 会话相关接口：
 
 | 接口 | 鉴权 | 用途 |

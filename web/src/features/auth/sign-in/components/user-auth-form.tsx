@@ -30,6 +30,7 @@ import { Dialog } from '@/components/dialog'
 import { PasswordInput } from '@/components/password-input'
 import { Turnstile } from '@/components/turnstile'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Form,
   FormControl,
@@ -134,6 +135,7 @@ export function UserAuthForm({
     defaultValues: {
       username: '',
       password: '',
+      remember_me: true,
     },
   })
 
@@ -170,6 +172,7 @@ export function UserAuthForm({
       const res = await login({
         username: data.username,
         password: data.password,
+        remember_me: data.remember_me,
         turnstile: submittedTurnstileToken,
       })
 
@@ -397,6 +400,30 @@ export function UserAuthForm({
                   >
                     {t('Forgot password?')}
                   </Link>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='remember_me'
+              render={({ field }) => (
+                <FormItem className='flex items-center gap-2 space-y-0'>
+                  <FormControl>
+                    <Checkbox
+                      id='remember-me'
+                      checked={field.value}
+                      onCheckedChange={(checked) =>
+                        field.onChange(checked === true)
+                      }
+                    />
+                  </FormControl>
+                  <FormLabel
+                    htmlFor='remember-me'
+                    className='cursor-pointer font-normal'
+                  >
+                    {t('Keep me signed in')}
+                  </FormLabel>
                 </FormItem>
               )}
             />

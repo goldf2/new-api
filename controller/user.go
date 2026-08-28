@@ -28,8 +28,9 @@ import (
 )
 
 type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username   string `json:"username"`
+	Password   string `json:"password"`
+	RememberMe *bool  `json:"remember_me"`
 }
 
 var (
@@ -103,6 +104,11 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	rememberMe := true
+	if loginRequest.RememberMe != nil {
+		rememberMe = *loginRequest.RememberMe
+	}
+
 	// 检查是否启用2FA
 	twoFAEnabled, err := model.IsTwoFAEnabled(user.Id)
 	if err != nil {
@@ -112,7 +118,10 @@ func Login(c *gin.Context) {
 	}
 	if twoFAEnabled {
 		expiresAt := time.Now().Add(5 * time.Minute)
-		payload, err := common.Marshal(twoFALoginFlowPayload{AuthVersion: user.AuthVersion})
+		payload, err := common.Marshal(twoFALoginFlowPayload{
+			AuthVersion: user.AuthVersion,
+			RememberMe:  rememberMe,
+		})
 		if err != nil {
 			common.ApiError(c, err)
 			return
@@ -140,7 +149,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	setupLogin(&user, c)
+	setupLoginWithPersistence(&user, rememberMe, c)
 }
 
 // loginMethodFromContext 根据请求路径推导登录方式，用于登录审计日志。
@@ -183,10 +192,14 @@ func recordLoginAudit(user *model.User, c *gin.Context) {
 // setupLogin creates a server-controlled login Session and returns the shared
 // authentication bundle used by every login method.
 func setupLogin(user *model.User, c *gin.Context) {
-	setupLoginAtAuthVersion(user, 0, c)
+	setupLoginWithPersistence(user, true, c)
 }
 
-func setupLoginAtAuthVersion(user *model.User, expectedAuthVersion int64, c *gin.Context) {
+func setupLoginWithPersistence(user *model.User, persistent bool, c *gin.Context) {
+	setupLoginAtAuthVersion(user, 0, persistent, c)
+}
+
+func setupLoginAtAuthVersion(user *model.User, expectedAuthVersion int64, persistent bool, c *gin.Context) {
 	if user == nil || user.Id <= 0 || user.Status != common.UserStatusEnabled {
 		common.ApiErrorI18n(c, i18n.MsgAuthUserBanned)
 		return
@@ -218,7 +231,7 @@ func setupLoginAtAuthVersion(user *model.User, expectedAuthVersion int64, c *gin
 		return
 	}
 	model.UpdateUserLastLoginAt(user.Id)
-	service.WriteRefreshCookie(c, bundle.RefreshToken)
+	service.WriteRefreshCookie(c, bundle.RefreshToken, persistent)
 	setAuthNoStore(c)
 	recordLoginAudit(user, c)
 	c.JSON(http.StatusOK, gin.H{

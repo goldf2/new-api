@@ -585,6 +585,11 @@
                   },
                   "password": {
                     "type": "string"
+                  },
+                  "remember_me": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "是否在浏览器关闭后继续保持登录；省略时兼容原有持久登录行为"
                   }
                 }
               }
