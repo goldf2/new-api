@@ -180,6 +180,42 @@ func CountActiveUserSessions(userID int, now int64) (int64, error) {
 	return count, err
 }
 
+// RevokeOldestActiveUserSessions makes room for a new login without blocking
+// the user at the active-session cap. The cap remains a storage and account
+// safety bound; the least recently active sessions are rolled out first.
+func RevokeOldestActiveUserSessions(userID int, limit int, reason string) (int64, error) {
+	if userID <= 0 || limit <= 0 {
+		return 0, ErrUserSessionInvalid
+	}
+	now := time.Now().Unix()
+	var candidates []UserSession
+	if err := DB.Where(
+		"user_id = ? AND status = ? AND expires_at > ?",
+		userID,
+		UserSessionStatusActive,
+		now,
+	).
+		Order("last_active_at ASC").
+		Order("created_at ASC").
+		Order("sid ASC").
+		Limit(limit).
+		Find(&candidates).Error; err != nil {
+		return 0, err
+	}
+
+	var revoked int64
+	for i := range candidates {
+		changed, err := RevokeUserSession(userID, candidates[i].SID, reason)
+		if err != nil {
+			return revoked, err
+		}
+		if changed {
+			revoked++
+		}
+	}
+	return revoked, nil
+}
+
 // CountUserSessionsCreatedSince counts every issued row, regardless of its
 // current status or expiry. userID zero selects the global count.
 func CountUserSessionsCreatedSince(userID int, createdAfter int64) (int64, error) {

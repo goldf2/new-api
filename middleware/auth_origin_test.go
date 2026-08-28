@@ -109,7 +109,7 @@ func TestSessionCookieOriginGuardDevelopmentCompatibility(t *testing.T) {
 	}
 }
 
-func TestSessionCookieOriginGuardDoesNotTrustForwardedProtoFromClient(t *testing.T) {
+func TestSessionCookieOriginGuardAllowsPublicHTTPSOriginBehindProxy(t *testing.T) {
 	previousSecure := common.SessionCookieSecure
 	previousTrustedURLs := common.SessionCookieTrustedURLs
 	common.SessionCookieSecure = true
@@ -127,9 +127,8 @@ func TestSessionCookieOriginGuardDoesNotTrustForwardedProtoFromClient(t *testing
 	request := httptest.NewRequest(http.MethodPost, "http://panel.example.com/api/user/auth/refresh", nil)
 	request.Host = "panel.example.com"
 	request.Header.Set("Origin", "https://panel.example.com")
-	request.Header.Set("X-Forwarded-Proto", "https")
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 
-	assert.Equal(t, http.StatusForbidden, response.Code)
+	assert.Equal(t, http.StatusNoContent, response.Code)
 }

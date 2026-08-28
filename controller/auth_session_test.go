@@ -107,23 +107,29 @@ func TestWriteAuthSessionErrorMapsSessionGrowthLimits(t *testing.T) {
 	}
 }
 
-func TestSessionLimitDoesNotRecordRejectedLoginAsSuccessful(t *testing.T) {
+func TestSessionLimitRollsOutOldestSessionAndCompletesLogin(t *testing.T) {
 	previousDB := model.DB
+	previousLogDB := model.LOG_DB
 	previousRedis := common.RedisEnabled
+	previousSecret := common.SessionSecret
 	previousActiveLimit := common.UserSessionActiveLimit
 	previousIssuanceLimit := common.UserSessionIssuanceLimit
 	previousIssuanceWindow := common.UserSessionIssuanceWindowSeconds
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}))
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.Log{}))
 	model.DB = db
+	model.LOG_DB = db
 	common.RedisEnabled = false
+	common.SessionSecret = "session-limit-rollover-test-secret"
 	common.UserSessionActiveLimit = 1
 	common.UserSessionIssuanceLimit = 100
 	common.UserSessionIssuanceWindowSeconds = int64(common.DefaultUserSessionIssuanceWindowSeconds)
 	t.Cleanup(func() {
 		model.DB = previousDB
+		model.LOG_DB = previousLogDB
 		common.RedisEnabled = previousRedis
+		common.SessionSecret = previousSecret
 		common.UserSessionActiveLimit = previousActiveLimit
 		common.UserSessionIssuanceLimit = previousIssuanceLimit
 		common.UserSessionIssuanceWindowSeconds = previousIssuanceWindow
@@ -148,8 +154,12 @@ func TestSessionLimitDoesNotRecordRejectedLoginAsSuccessful(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/user/login", nil)
 	setupLogin(user, c)
 
-	assert.Equal(t, http.StatusConflict, recorder.Code)
+	assert.Equal(t, http.StatusOK, recorder.Code)
 	var stored model.User
 	require.NoError(t, db.First(&stored, user.Id).Error)
-	assert.Equal(t, previousLastLoginAt, stored.LastLoginAt)
+	assert.Greater(t, stored.LastLoginAt, previousLastLoginAt)
+	oldest, err := model.GetUserSessionBySID("existing-active-session")
+	require.NoError(t, err)
+	assert.Equal(t, model.UserSessionStatusRevoked, oldest.Status)
+	assert.Equal(t, "session_limit_rollover", oldest.RevokedReason)
 }

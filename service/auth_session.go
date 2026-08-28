@@ -73,7 +73,10 @@ func createLoginSession(userID int, expectedAuthVersion int64, loginMethod, ip, 
 		return nil, err
 	}
 	if activeCount >= int64(common.UserSessionActiveLimit) {
-		return nil, model.ErrUserSessionLimit
+		makeRoom := activeCount - int64(common.UserSessionActiveLimit) + 1
+		if _, err := model.RevokeOldestActiveUserSessions(userID, int(makeRoom), "session_limit_rollover"); err != nil {
+			return nil, err
+		}
 	}
 	issuanceCount, err := model.CountUserSessionsCreatedSince(userID, now-common.UserSessionIssuanceWindowSeconds)
 	if err != nil {

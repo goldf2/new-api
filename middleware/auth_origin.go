@@ -60,7 +60,7 @@ func requestBrowserOrigin(request *http.Request) (string, bool) {
 
 func isAllowedSessionOrigin(request *http.Request, origin string) bool {
 	requestScheme := "http"
-	if request.TLS != nil {
+	if request.TLS != nil || common.SessionCookieSecure {
 		requestScheme = "https"
 	}
 	requestOrigin, err := common.NormalizeOrigin(requestScheme + "://" + request.Host)
